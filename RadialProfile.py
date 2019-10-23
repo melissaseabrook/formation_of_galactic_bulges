@@ -84,3 +84,5 @@ if __name__ == "__main__":
 	imagefile='RecalL0025N0752galface_659536.png'
 	image=plt.imread('galaxyimagebinRecal/'+imagefile, 0)
 	run_radial_profile(image, imagefile)
+
+	#testcommit
