@@ -35,10 +35,9 @@ for sim_name,sim_size in mySims:
                 WHERE \
                     SH.GalaxyID = AP.GalaxyID and \
                     AP.ApertureSize = 30 and \
-                    SH.MassType_Star between 1.0e10 and 1.0e11 \
-                    and SH.MassType_DM between 1.0e11 and 2.0e12 \
-                    and AP.Mass_Star between 1.0e10 and 1.0e11 and \
-                    SH.StarFormationRate between 0.02 and 50 and \
+                    SH.MassType_Star between 2.0e10 and 8.0e10 and \
+                    AP.Mass_Star between 2.0e10 and 8.0e10 and \
+                    SH.StarFormationRate between 0.1 and 10 and \
                     SH.SnapNum = 28 and \
                     SH.Image_face IS NOT null\
                 ORDER BY \
@@ -51,7 +50,5 @@ for sim_name,sim_size in mySims:
     df=df.assign(name1 = lambda x: x.face)
     df['name1']=df['name1'].str.replace('http://virgodb.cosma.dur.ac.uk/eagle-webstorage/'+sim_name+'_Subhalo/', '')
     df=df.assign(filename = lambda x: sim_name +'' + x.name1)
-    print(df['face'])
-    print(df['filename'])
     df['image']=df.apply(lambda x: download_image(x.face, x.filename), axis=1)
     print(df['image'])
