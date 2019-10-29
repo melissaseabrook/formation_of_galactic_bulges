@@ -12,22 +12,26 @@ from astropy.stats import SigmaClip
 
 
 def sigmaclip(image, sigma, box_size):
-    median_background=np.median(image)
-    std_background=np.std(image)
-    print(median_background)
-    print(median_background)
+	#shows relative fluctuations in pixel intensities
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    median_background=np.median(gray)
+    std_background=np.std(gray)
+    print(median_background)
+    print(median_background)
     print(gray.shape)
     for i in np.arange(0,257, box_size):
         for j in np.arange(0,257, box_size):
             i=int(i)
             j=int(j)
+			#selects box in image
             area=gray[i:i+box_size, j:j+box_size]
             median=np.median(area)
             std=np.std(area)
-            area[(area>(median + sigma*std)) & (area>(median_background+std_background))]=255
-            area[(area>(median + sigma*std)) & (area<(median_background+std_background))]=0
-            area[area<(median + sigma*std)]=0
+			#colours pixel white if bright enough, black if not
+            area[(area>(median + (sigma*std))) & (area>(median_background+(2*std_background)))]=255
+            area[(area>(median + (sigma*std))) & (area<(median_background+(2*std_background)))]=0
+            area[area<(median + (sigma*std))]=0
+			#inserts masked box into image
             gray[i:i+box_size, j:j+box_size]=area
     return(gray)
         
@@ -51,9 +55,9 @@ def findandlabelbulge(image, imagefile):
 	print(std)
 	gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 	blurred1 = cv2.GaussianBlur(gray, ksize=(11, 11), sigmaX=3,sigmaY=3)
-	thresh1 = cv2.threshold(blurred1, median + 3*std, 255, cv2.THRESH_BINARY)[1]
+	thresh1 = cv2.threshold(blurred1, median + 5*std, 255, cv2.THRESH_BINARY)[1]
 	thresh1 = cv2.erode(thresh1, None, iterations=2)
-	thresh1 = cv2.dilate(thresh1, None, iterations=4)
+	#thresh1 = cv2.dilate(thresh1, None, iterations=4)
 
 	blurred2 = cv2.GaussianBlur(gray, ksize=(11, 11), sigmaX=3,sigmaY=3)
 	thresh2 = cv2.threshold(blurred2, median +std, 255, cv2.THRESH_BINARY)[1]
@@ -61,7 +65,7 @@ def findandlabelbulge(image, imagefile):
 
 	#blurred3 = cv2.GaussianBlur(gray, ksize=(11, 11), sigmaX=2,sigmaY=2)
 	#thresh3 = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY,61,0)
-	thresh3= sigmaclip(image,3,12)
+	thresh3= sigmaclip(image,4,8)
 
 	cv2.imshow("thresh1", thresh1), cv2.waitKey(0)
 	cv2.imshow("thresh2", thresh2), cv2.waitKey(0)
@@ -152,8 +156,7 @@ def findandlabelbulge(image, imagefile):
 	halotobulgeradius=hradius/bradius
 	print("halo radius:bulge radius ={}".format(halotobulgeradius))
 	print("star count ={}".format(count))
-	
-	
+
 	cv2.imshow("Image", imagecopy)
 	cv2.imwrite('galaxygraphsbinRecal/opencvfindbulge'+imagefile, imagecopy)
 	cv2.waitKey(0)
@@ -161,7 +164,7 @@ def findandlabelbulge(image, imagefile):
 
 
 if __name__ == "__main__":
-	imagefile='RecalL0025N0752galface_659536.png'
+	imagefile='RecalL0025N0752galface_737885.png'
 	BGRimage=cv2.imread('galaxyimagebinRecal/'+imagefile)
 	RGBimage=cv2.cvtColor(BGRimage, cv2.COLOR_BGR2RGB)
 	image=plt.imread('galaxyimagebinRecal/'+imagefile, 0)
