@@ -8,6 +8,7 @@ import imutils
 import math
 from scipy.optimize import curve_fit
 from lmfit import Model
+from astropy.stats import sigma_clip
 
 def findcenter(image):
 	#finds coords of central bulge
@@ -76,17 +77,23 @@ def opencvhistogram(img, imagefile):
 def findandlabelbulge(image, imagefile):
 	#locates central bulge and diffuse halo, and marks this on the image
 	imagecopy=image.copy()
+	median=np.median(image)
+
+	std=np.std(image)
+	print(median)
+	print(std)
 	gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-	blurred1 = cv2.GaussianBlur(gray, (11, 11), 0)
-	thresh1 = cv2.threshold(blurred1, 150, 255, cv2.THRESH_BINARY)[1]
+	blurred1 = cv2.GaussianBlur(gray, ksize=(11, 11), sigmaX=3,sigmaY=3)
+	thresh1 = cv2.threshold(blurred1, median + 3*std, 255, cv2.THRESH_BINARY)[1]
 	thresh1 = cv2.erode(thresh1, None, iterations=2)
 	thresh1 = cv2.dilate(thresh1, None, iterations=4)
 
-	blurred2 = cv2.GaussianBlur(gray, (11, 11), 0)
-	thresh2 = cv2.threshold(blurred2, 35, 255, cv2.THRESH_BINARY)[1]
+	blurred2 = cv2.GaussianBlur(gray, ksize=(11, 11), sigmaX=3,sigmaY=3)
+	thresh2 = cv2.threshold(blurred2, median +std, 255, cv2.THRESH_BINARY)[1]
 	thresh2 = cv2.dilate(thresh2, None, iterations=4)
 
-	thresh3 = cv2.threshold(gray, 130, 255, cv2.THRESH_BINARY)[1]
+	blurred3 = cv2.GaussianBlur(gray, ksize=(11, 11), sigmaX=2,sigmaY=2)
+	thresh3 = cv2.adaptiveThreshold(blurred3, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY,61,0)
 
 	cv2.imshow("thresh1", thresh1), cv2.waitKey(0)
 	cv2.imshow("thresh2", thresh2), cv2.waitKey(0)
@@ -209,10 +216,6 @@ def radial_profile(image, center):
 	radialprofile=(tbin)/(nr)
 	return radialprofile
 
-def radialprofiletoSB(radialprofile):
-	ind=np.linspace(1, len(radialprofile), num=len(radialprofile))
-	SB=radialprofile/(ind*2*np.pi)
-	return SB, ind
 
 def findeffectiveradius(radialprofile):
 	totalbrightness=np.sum(radialprofile)
@@ -235,7 +238,7 @@ def run_radial_profile(image, imagefile):
 	cy=int(height/2)
 	maxVal, center = findcenter(image)
 	rad=radial_profile(image,center)
-	SB, r=radialprofiletoSB(rad)
+	r= np.linspace(0, 30.0, num=len(rad))
 	totalbrightness, r_e , centralbrightness, i_e= findeffectiveradius(rad)
 	print("I_e={}, R_e={}".format(i_e, r_e))
 	popt1,pcov1=curve_fit(SersicProfile, rad, r, p0=(i_e, r_e, 1))
@@ -298,16 +301,14 @@ def run_radial_profile_colour(image, imagefile):
 	plt.savefig('galaxygraphsbinRecal/radialbrightnessprofile'+imagefile)
 	plt.show()
 
-
-
 if __name__ == "__main__":
 	imagefile='RecalL0025N0752galface_659536.png'
 	BGRimage=cv2.imread('galaxyimagebinRecal/'+imagefile)
 	RGBimage=cv2.cvtColor(BGRimage, cv2.COLOR_BGR2RGB)
 	image=plt.imread('galaxyimagebinRecal/'+imagefile, 0)
-	#findandlabelbulge(BGRimage,imagefile)
+	findandlabelbulge(BGRimage,imagefile)
 	#central1kpcregion(BGRimage)
-	run_radial_profile(image, imagefile)
+	#run_radial_profile(image, imagefile)
 	#matplotlibhistogram(RGBimage,imagefile)
 	#matplotlibcolourhistogram(RGBimage,imagefile)8
 	#opencvhistogram(RGBimage,imagefile)
