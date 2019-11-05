@@ -61,9 +61,75 @@ def SersicProfile(r, I_e, R_e, n):
 	return I_e*np.exp((-b*(G-1)))
 
 
+def findbulge(image, imagefile):
+	#locates central bulge and diffuse halo, and marks this on the image
+	imagecopy=image.copy()
+	median=np.median(image)
+
+	std=np.std(image)
+	print(median)
+	print(std)
+	gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+	blurred1 = cv2.GaussianBlur(gray, ksize=(11, 11), sigmaX=3,sigmaY=3)
+	thresh1 = cv2.threshold(blurred1, median + 5*std, 255, cv2.THRESH_BINARY)[1]
+	thresh1 = cv2.erode(thresh1, None, iterations=2)
+	#thresh1 = cv2.dilate(thresh1, None, iterations=4)
+
+	blurred2 = cv2.GaussianBlur(gray, ksize=(11, 11), sigmaX=3,sigmaY=3)
+	thresh2 = cv2.threshold(blurred2, median +std, 255, cv2.THRESH_BINARY)[1]
+	thresh2 = cv2.dilate(thresh2, None, iterations=4)
+
+	#find bulge
+	# perform a connected component analysis on the thresholded
+	# image, then initialize a mask to store only the "large" components
+	labels1 = measure.label(thresh1, neighbors=8, background=0)
+	mask1 = np.zeros(thresh1.shape, dtype="uint8")
+	# loop over the unique components
+	for label in np.unique(labels1):
+		# if this is the background label, ignore it
+		if label == 0:
+			continue
+		# otherwise, construct the label mask and count the number of pixels 
+		labelMask = np.zeros(thresh1.shape, dtype="uint8")
+		labelMask[labels1 == label] = 255
+		numPixels = cv2.countNonZero(labelMask)
+		# if the number of pixels in the component is sufficiently large, then add it to our mask of "large blobs"
+		if numPixels > 20:
+			mask1 = cv2.add(mask1, labelMask)
+	# find the contours in the mask, then sort them from left to right
+	cnts = cv2.findContours(mask1.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+	cnts = imutils.grab_contours(cnts)
+	if len(cnts)>0:
+		cnts = contours.sort_contours(cnts)[0]
+	# loop over the contours
+	bradius, bcX,bcY=0,0,0
+	c=max(cnts, key=cv2.contourArea)
+	(x, y, w, h) = cv2.boundingRect(c)
+	((bcX, bcY), bradius) = cv2.minEnclosingCircle(c)
+	print("bulge radius:{},  bulge centre({},{})".format(bradius, bcX,bcY))
 
 
-
+	#find halo
+	labels2 = measure.label(thresh2, neighbors=8, background=0)
+	mask2 = np.zeros(thresh2.shape, dtype="uint8")	
+	for label in np.unique(labels2):
+		if label == 0:
+			continue
+		labelMask = np.zeros(thresh2.shape, dtype="uint8")
+		labelMask[labels2 == label] = 255
+		numPixels = cv2.countNonZero(labelMask)
+		if numPixels > 20:
+			mask2 = cv2.add(mask2, labelMask)
+	cnts = cv2.findContours(mask2.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+	cnts = imutils.grab_contours(cnts)
+	if len(cnts)>0:
+		cnts = contours.sort_contours(cnts)[0]
+	hcX, hcY, hradius =0,0,0
+	c=max(cnts, key=cv2.contourArea)
+	(x, y, w, h) = cv2.boundingRect(c)
+	((hcX, hcY), hradius) = cv2.minEnclosingCircle(c)
+	print("halo radius:{}, halo centre({},{})".format(hradius, hcX,hcY))
+	return bradius,hradius
 
 
 def run_radial_profile(image, imagefile):
@@ -75,9 +141,9 @@ def run_radial_profile(image, imagefile):
 	rad, stdbins=radial_profile(image,center)
 	max_r=np.sqrt(2)*15
 	r= np.linspace(0, max_r, num=len(rad))
-	#SB, r=radialprofiletoSB(rad)
 	
 	i_e, r_e, centralbrightness, totalbrightness= findeffectiveradius(rad, r) 
+	bradius,hradius = findbulge(image, imagefile)
 
 	r=r[1:80]
 	rad=rad[1:80]
@@ -88,7 +154,6 @@ def run_radial_profile(image, imagefile):
 	popt2, pcov2 = curve_fit(lambda x,n: SersicProfile(x, i_e, r_e, n), r, rad)
 	print("I_e,R_e,n={}".format(popt1))
 	print("I_e={}, R_e={}, n={}".format(i_e, r_e, popt2))
-
 
 	sns.set(style='whitegrid')
 	plt.subplot(211)
@@ -113,8 +178,42 @@ def run_radial_profile(image, imagefile):
 	plt.show()
 	plt.savefig('galaxygraphsbinRecal/radialbrightnessprofile'+imagefile)
 
-	sns.residplot(r, rad, lowess=True, color="g")
+	#2 component fitting
+	b1=bradius*30/256
+	h1=hradius*30/256
+	b1index=(np.abs((b1) - r)).argmin()
+	h1index=(np.abs((h1) - r)).argmin()
+	print(b1, b1index, h1, h1index)
+	popt21, pcov21 = curve_fit(lambda x,n: SersicProfile(x, i_e, r_e, n), r[0:b1index], rad[0:b1index])
+	popt22, pcov22 = curve_fit(lambda x,n: SersicProfile(x, i_e, r_e, n), r[b1index:h1index], rad[b1index:h1index])
+	print("n1={}".format(popt21))
+	print("n2={}".format(popt22))
+
+	sns.set(style='whitegrid')
+	plt.subplot(211)
+	plt.errorbar(r[0:h1index], rad[0:h1index], yerr=(stdbins[0:h1index]*2), fmt='', color='k', capsize=1)
+	plt.plot(r[0:b1index], SersicProfile(r[0:b1index],i_e, r_e,popt21), 'r-', label='bulge n={}'.format(round(popt21[0],2)))
+	#plt.plot(r, SersicProfile(r,i_e, r_e, popt2 +pcov2[0,0]), 'g--')
+	plt.plot(r[b1index:h1index], SersicProfile(r[b1index:h1index],i_e, r_e, popt22), 'g', label='halo n={} free'.format(round(popt22[0],2)))
+	#plt.plot(r, SersicProfile(r,i_e, r_e, popt2 -pcov2[0,0]) , 'g--')
+	#plt.fill_between(r, SersicProfile(r,i_e, r_e, popt2 -pcov2[0,0]**0.5), SersicProfile(r,i_e, r_e, popt2 +pcov2[0,0]**0.5), facecolor='gray', alpha=0.5)
+
+
+	plt.title('Radius vs Pixel intensity'), plt.xlabel('Radius (kpc)'), plt.ylabel('Intensity'), plt.xlim(0), plt.ylim(0,250)
+	plt.legend()
+
+	plt.subplot(212)
+	plt.errorbar(r[0:h1index], rad[0:h1index], yerr=(stdbins[0:h1index]*2), fmt='', color='k', capsize=1)
+	plt.plot(r[0:b1index], SersicProfile(r[0:b1index],i_e, r_e, 4), 'b-', label='De Vaucouleurs, n=4')
+	plt.plot(r[b1index:h1index], SersicProfile(r[b1index:h1index],i_e, r_e, 1), 'r-', label='Exponential Disc, n=1' )
+	plt.title('Exponential Disc+Vaucouleurs'), plt.xlabel('Radius (kpc)'), plt.ylabel('Intensity'), plt.xlim(0), #plt.ylim(0,250)
+	plt.legend()
+	plt.tight_layout()
 	plt.show()
+	plt.savefig('galaxygraphsbinRecal/2componentradialbrightnessprofile'+imagefile)
+
+
+
 	"""
 	plt.plot(r, rad)
 	plt.title('Log'), plt.xlabel('log(Radius) (log(kpc))'), plt.ylabel('log(Intensity)')
@@ -125,6 +224,6 @@ def run_radial_profile(image, imagefile):
 	"""
 
 if __name__ == "__main__":
-	imagefile='RecalL0025N0752galface_929556.png'
+	imagefile='RecalL0025N0752galface_924755.png'
 	image=plt.imread('galaxyimagebinRecal/'+imagefile, 0)
 	run_radial_profile(image, imagefile)
