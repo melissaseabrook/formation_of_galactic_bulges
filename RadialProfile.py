@@ -55,6 +55,12 @@ def findeffectiveradius(radialprofile, r):
 	print(i_e)
 	return i_e, r_e, centralbrightness, totalbrightness
 
+def findlightintensity(radialpofile, radius):
+	radius=int(radius)
+	cumulativebrightness=np.sum(radialpofile[0:radius])
+	return cumulativebrightness
+
+
 def SersicProfile(r, I_e, R_e, n):
 	b=np.exp(0.6950 + np.log(n) - (0.1789/n))
 	G=(r/R_e)**(1/n)
@@ -129,7 +135,7 @@ def findbulge(image, imagefile):
 	(x, y, w, h) = cv2.boundingRect(c)
 	((hcX, hcY), hradius) = cv2.minEnclosingCircle(c)
 	print("halo radius:{}, halo centre({},{})".format(hradius, hcX,hcY))
-	return bradius,hradius
+	return bradius,hradius, (hcX,hcY), (bcX,bcY)
 
 
 def run_radial_profile(image, imagefile):
@@ -143,7 +149,9 @@ def run_radial_profile(image, imagefile):
 	r= np.linspace(0, max_r, num=len(rad))
 	
 	i_e, r_e, centralbrightness, totalbrightness= findeffectiveradius(rad, r) 
-	bradius,hradius = findbulge(image, imagefile)
+	bradius,hradius, (hcX,hcY), (bcX,bcY) = findbulge(image, imagefile)
+	hintensity=findlightintensity(rad,hradius)
+	bintensity=findlightintensity(rad,bradius)
 
 	r=r[1:80]
 	rad=rad[1:80]

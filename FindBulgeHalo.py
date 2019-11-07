@@ -35,6 +35,21 @@ def sigmaclip(image, sigma, box_size):
             gray[i:i+box_size, j:j+box_size]=area
     return(gray)
         
+def findlightintensity(image, radius, center):
+	npix, npiy = image.shape[:2]
+	x1 = np.arange(0,npix)
+	y1 = np.arange(0,npiy)
+	x,y = np.meshgrid(y1,x1)
+	r=np.sqrt((x-center[0])**2+(y-center[1])**2)
+	#r=r*300/256
+	r=r.astype(np.int)
+	radius=int(radius)
+	image=image.mean(axis=2)
+	tbin=np.bincount(r.ravel(),image.ravel()) #sum of image values in each radius bin
+	nr=np.bincount(r.ravel()) #no in each radius bin
+	radialprofile=(tbin)/(nr)
+	cumulativebrightness=np.sum(radialprofile[0:radius])
+	return cumulativebrightness
 
 
 def findcenter(image):
@@ -157,6 +172,10 @@ def findandlabelbulge(image, imagefile):
 	print("halo radius:bulge radius ={}".format(halotobulgeradius))
 	print("star count ={}".format(count))
 
+	halo_intensity=findlightintensity(image, hradius, (hcX,hcY))
+	bulge_intensity=findlightintensity(image, bradius, (bcX,bcY))
+	halotobulgeintensity= halo_intensity/bulge_intensity
+	print("halo intensity = {}, bulge intensity ={}, halo:bulge intensity ={}".format(halo_intensity, bulge_intensity, halotobulgeintensity))
 	cv2.imshow("Image", imagecopy)
 	cv2.imwrite('galaxygraphsbinRecal/opencvfindbulge'+imagefile, imagecopy)
 	cv2.waitKey(0)
