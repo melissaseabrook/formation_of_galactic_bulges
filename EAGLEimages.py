@@ -28,12 +28,15 @@ for sim_name,sim_size in mySims:
                     SH.Redshift as z, \
                     SH.Stars_Metallicity as Z, \
                     SH.Image_Face as face, \
-                    AP.Mass_Star as mass \
+                    AP.Mass_Star as mass, \
+                    MK.DiscToTotal as DiscToTotal\
                 FROM \
                     %s_Subhalo as SH, \
-                    %s_Aperture as AP \
+                    %s_Aperture as AP, \
+                    %s_MorphoKinem as MK \
                 WHERE \
                     SH.GalaxyID = AP.GalaxyID and \
+                    SH.GalaxyID = MK.GalaxyID and \
                     AP.ApertureSize = 30 and \
                     SH.MassType_Star between 2.0e10 and 8.0e10 and \
                     AP.Mass_Star between 2.0e10 and 8.0e10 and \
@@ -41,14 +44,16 @@ for sim_name,sim_size in mySims:
                     SH.SnapNum = 28 and \
                     SH.Image_face IS NOT null\
                 ORDER BY \
-                    AP.Mass_Star"%( sim_name , sim_name)
+                    AP.Mass_Star"%( sim_name , sim_name, sim_name)
     # Execute query .
     myData = sql.execute_query (con , myQuery)
-    df=pd.DataFrame(myData, columns=['z','Z','face','mass'])
+    df=pd.DataFrame(myData, columns=['z','Z','face','mass', 'DiscToTotal'])
     df['face']=  df['face'].str.decode("utf-8")
     df['face']=df['face'].str.replace('"<img src=', '').str.replace('>"', '').str.replace("'",'')
     df=df.assign(name1 = lambda x: x.face)
     df['name1']=df['name1'].str.replace('http://virgodb.cosma.dur.ac.uk/eagle-webstorage/'+sim_name+'_Subhalo/', '')
     df=df.assign(filename = lambda x: sim_name +'' + x.name1)
     df['image']=df.apply(lambda x: download_image(x.face, x.filename), axis=1)
+    df.to_csv('EAGLEimagesdf')
     print(df['image'])
+
