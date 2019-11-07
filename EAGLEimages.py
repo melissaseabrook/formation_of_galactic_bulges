@@ -54,6 +54,6 @@ for sim_name,sim_size in mySims:
     df['name1']=df['name1'].str.replace('http://virgodb.cosma.dur.ac.uk/eagle-webstorage/'+sim_name+'_Subhalo/', '')
     df=df.assign(filename = lambda x: sim_name +'' + x.name1)
     df['image']=df.apply(lambda x: download_image(x.face, x.filename), axis=1)
-    df.to_csv('EAGLEimagesdf')
+    df.to_csv('EAGLEimagesdf.csv')
     print(df['image'])
 
