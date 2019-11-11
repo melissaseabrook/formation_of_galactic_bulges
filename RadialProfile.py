@@ -43,10 +43,6 @@ def findeffectiveradius(radialprofile, r):
 	r_e_unnormalised=((np.abs((totalbrightness/2) - cumulativebrightness)).argmin())
 	r_e=r_e_unnormalised*(30.0/256)/np.sqrt(2)
 	i_e= radialprofile[r_e_unnormalised-1]
-	print(totalbrightness)
-	print(r_e_unnormalised-1)
-	print(cumulativebrightness[r_e_unnormalised-1])
-	print(i_e)
 	return i_e, r_e, centralbrightness, totalbrightness
 
 def findlightintensity(radialpofile, radius):
