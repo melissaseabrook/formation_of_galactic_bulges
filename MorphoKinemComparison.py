@@ -230,7 +230,7 @@ def plotbulgetodisc(df):
     plt.subplots_adjust(top=0.9)
     g.fig.suptitle('PairPlot for relationships between paaramters, coloured by galaxy size')
     plt.show()
-    plt.savefig('galaxygraphsbinRecal/bulgeparametersrelationships')
+    g.savefig('galaxygraphsbinRecal/bulgeparametersrelationships.png')
 
 
     norm=plt.Normalize(df.Z.min(), df.Z.max())
@@ -242,7 +242,7 @@ def plotbulgetodisc(df):
     plt.subplots_adjust(top=0.9)
     ax.fig.suptitle('Sersic index vs DiscToTotal, coloured by Z, sized by mass')
     plt.show()
-    plt.savefig('galaxygraphsbinRecal/DiscToTotalvsSersicIndex')
+    ax.savefig('galaxygraphsbinRecal/DiscToTotalvsSersicIndex.png')
 
 
 
