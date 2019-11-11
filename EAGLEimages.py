@@ -28,6 +28,8 @@ for sim_name,sim_size in mySims:
                     SH.Redshift as z, \
                     SH.Stars_Metallicity as Z, \
                     SH.Image_Face as face, \
+                    SH.HalfMassRad_Star as HalfMassRadius, \
+                    AP.VelDisp as VelocityDispersion, \
                     AP.Mass_Star as mass, \
                     MK.DiscToTotal as DiscToTotal\
                 FROM \
@@ -38,9 +40,9 @@ for sim_name,sim_size in mySims:
                     SH.GalaxyID = AP.GalaxyID and \
                     SH.GalaxyID = MK.GalaxyID and \
                     AP.ApertureSize = 30 and \
-                    SH.MassType_Star between 2.0e10 and 8.0e10 and \
-                    AP.Mass_Star between 2.0e10 and 8.0e10 and \
-                    SH.StarFormationRate between 0.1 and 10 and \
+                    SH.MassType_Star between 1.0e10 and 2.0e11 and \
+                    AP.Mass_Star between 1.0e10 and 2.0e11 and \
+                    SH.StarFormationRate between 0.1 and 15 and \
                     SH.SnapNum = 28 and \
                     SH.Image_face IS NOT null\
                 ORDER BY \
