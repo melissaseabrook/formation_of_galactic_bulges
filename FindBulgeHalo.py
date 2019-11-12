@@ -51,7 +51,6 @@ def findlightintensity(image, radius, center):
     cumulativebrightness=np.sum(radialprofile[0:radius])
     return cumulativebrightness
 
-
 def findcenter(image):
     #finds coords of central bulge
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -59,12 +58,10 @@ def findcenter(image):
     (minVal, maxVal, minLoc, maxLoc) = cv2.minMaxLoc(gray)
     return maxVal, maxLoc
 
-
 def findandlabelbulge(image, imagefile):
     #locates central bulge and diffuse halo, and marks this on the image
     imagecopy=image.copy()
     median=np.median(image)
-
     std=np.std(image)
     print(median)
     print(std)
@@ -179,8 +176,6 @@ def findandlabelbulge(image, imagefile):
     cv2.imshow("Image", imagecopy)
     cv2.imwrite('galaxygraphsbinRecal/opencvfindbulge'+imagefile, imagecopy)
     cv2.waitKey(0)
-
-
 
 if __name__ == "__main__":
     imagefile='RecalL0025N0752galface_737885.png'

@@ -8,7 +8,6 @@ import imutils
 import math
 from scipy.optimize import curve_fit
 from scipy import stats
-from lmfit import Model
 import seaborn as sns
 
 def findcenter(image):
@@ -158,8 +157,6 @@ def run_radial_profile(image, imagefile):
 	print("I_e={}, R_e={}, n={}".format(i_e, r_e, popt2))
 	print("I_e={}, R_e={}, n={}".format(i_e, r_e, popt3))
 
-	sns.set(style='whitegrid')
-	fig=plt.figure()
 	plt.subplot(211)
 	plt.errorbar(r, rad, yerr=(stdbins*2), fmt='', color='k', capsize=0.5, elinewidth=0.5)
 	plt.plot(r, SersicProfile(r,*popt1), 'r-', label='I_e={}, R_e={}, n={} free'.format(round(popt1[0],2),round(popt1[1],2),round(popt1[2],2)))
@@ -178,9 +175,10 @@ def run_radial_profile(image, imagefile):
 	plt.title('Exponential Disc+Vaucouleurs, 2 component fit'), plt.xlabel('Radius (kpc)'), plt.ylabel('Intensity'), plt.xlim(0), plt.ylim(0,250)
 	plt.legend()
 	plt.tight_layout()
-	plt.show()
 	plt.savefig('galaxygraphsbinRecal/radialbrightnessprofile'+imagefile)
-
+	plt.show()
+	
+	
 	#2 component fitting
 
 	popt21, pcov21 = curve_fit(lambda x,n: SersicProfile(x, i_e, r_e, n), r[0:bindex], rad[0:bindex],sigma=stdbins[0:bindex]*2, absolute_sigma=True)
@@ -188,7 +186,6 @@ def run_radial_profile(image, imagefile):
 	print("n1={}".format(popt21))
 	print("n2={}".format(popt22))
 
-	sns.set(style='whitegrid')
 	plt.subplot(211)
 	plt.errorbar(r[0:hindex], rad[0:hindex], yerr=(stdbins[0:hindex]*2), fmt='', color='k', capsize=0.5, elinewidth=0.5)
 	plt.plot(r[0:bindex], SersicProfile(r[0:bindex],i_e, r_e,popt21), 'r-', label='bulge n={}'.format(round(popt21[0],2)))
@@ -206,9 +203,9 @@ def run_radial_profile(image, imagefile):
 	plt.title('Exponential Disc+Vaucouleurs'), plt.xlabel('Radius (kpc)'), plt.ylabel('Intensity'), plt.xlim(0), #plt.ylim(0,250)
 	plt.legend()
 	plt.tight_layout()
-	plt.show()
 	plt.savefig('galaxygraphsbinRecal/2componentradialbrightnessprofile'+imagefile)
-
+	plt.show()
+	
 
 
 	"""
@@ -221,6 +218,6 @@ def run_radial_profile(image, imagefile):
 	"""
 
 if __name__ == "__main__":
-	imagefile='RecalL0025N0752galface_924755.png'
+	imagefile='RecalL0025N0752galface_1785362.png'
 	image=plt.imread('galaxyimagebinRecal/'+imagefile, 0)
 	run_radial_profile(image, imagefile)
