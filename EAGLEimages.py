@@ -8,11 +8,11 @@ import re
 import os
 import pandas as pd
 # Array of chosen simulations. entries refer to simulation name and comoving box length
-mySims = np.array ([('RecalL0025N0752', 25.)])
+mySims = np.array (['RecalL0025N0752','RefL0050N0752','RefL0025N0376'])
 dir_base=os.getcwd()
-def download_image(url, filename):
-    urllib.request.urlretrieve(url, 'galaxyimagebinRecal/'+filename)
-    local_path_image=os.path.join(dir_base, 'galaxyimagebinRecal/'+filename)
+def download_image(url, filename, sim_name):
+    urllib.request.urlretrieve(url, 'galaxyimagebin'+sim_name+'/'+filename)
+    local_path_image=os.path.join(dir_base, 'galaxyimagebin'+sim_name+'/'+filename)
     return(local_path_image)
 
 # MW properties: M* = 5 10^10 solar masses, SFR = 3.5 solar masses per year, 
@@ -21,7 +21,7 @@ def download_image(url, filename):
 #Uses eagleSQLTools module to connect to database for username and password
 #If username and password not given, module will prompt for it.
 con = sql.connect("hwg083", password="KJHjqm91")
-for sim_name,sim_size in mySims:
+for sim_name in mySims:
     print(sim_name)
     
     myQuery = "SELECT \
@@ -29,8 +29,10 @@ for sim_name,sim_size in mySims:
                     SH.Stars_Metallicity as Z, \
                     SH.Image_Face as face, \
                     SH.HalfMassRad_Star as HalfMassRadius, \
-                    AP.VelDisp as VelocityDispersion, \
+                    AP.VelDisp as VelDisp, \
                     AP.Mass_Star as mass, \
+                    AP.Mass_BH as BHmass, \
+                    AP.SFR as SFR, \
                     MK.DiscToTotal as DiscToTotal\
                 FROM \
                     %s_Subhalo as SH, \
@@ -49,13 +51,13 @@ for sim_name,sim_size in mySims:
                     AP.Mass_Star"%( sim_name , sim_name, sim_name)
     # Execute query .
     myData = sql.execute_query (con , myQuery)
-    df=pd.DataFrame(myData, columns=['z','Z','face','mass', 'DiscToTotal'])
+    df=pd.DataFrame(myData, columns=['z','Z','face','mass', 'DiscToTotal', 'HalfMassRadius','VelDisp','BHmass','SFR'])
     df['face']=  df['face'].str.decode("utf-8")
     df['face']=df['face'].str.replace('"<img src=', '').str.replace('>"', '').str.replace("'",'')
     df=df.assign(name1 = lambda x: x.face)
     df['name1']=df['name1'].str.replace('http://virgodb.cosma.dur.ac.uk/eagle-webstorage/'+sim_name+'_Subhalo/', '')
     df=df.assign(filename = lambda x: sim_name +'' + x.name1)
-    df['image']=df.apply(lambda x: download_image(x.face, x.filename), axis=1)
-    df.to_csv('EAGLEimagesdf.csv')
+    df['image']=df.apply(lambda x: download_image(x.face, x.filename, sim_name), axis=1)
+    df.to_csv('EAGLEimagesdf'+sim_name+'.csv')
     print(df['image'])
 
