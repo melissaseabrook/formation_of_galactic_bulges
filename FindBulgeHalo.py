@@ -69,9 +69,9 @@ def findandlabelbulge(image, imagefile):
     blurred1 = cv2.GaussianBlur(gray, ksize=(11, 11), sigmaX=3,sigmaY=3)
     thresh1 = cv2.threshold(blurred1, median + 5*std, 255, cv2.THRESH_BINARY)[1]
     thresh1 = cv2.erode(thresh1, None, iterations=2)
-    #thresh1 = cv2.dilate(thresh1, None, iterations=4)
+    thresh1 = cv2.dilate(thresh1, None, iterations=4)
 
-    blurred2 = cv2.GaussianBlur(gray, ksize=(11, 11), sigmaX=3,sigmaY=3)
+    blurred2 = cv2.GaussianBlur(gray, ksize=(15, 15), sigmaX=3,sigmaY=3)
     thresh2 = cv2.threshold(blurred2, median +std, 255, cv2.THRESH_BINARY)[1]
     thresh2 = cv2.dilate(thresh2, None, iterations=4)
 

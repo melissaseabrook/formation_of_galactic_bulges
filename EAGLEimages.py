@@ -43,9 +43,9 @@ for sim_name in mySims:
                     SH.GalaxyID = MK.GalaxyID and \
                     AP.ApertureSize = 30 and \
                     SH.MassType_Star between 1.0e10 and 2.0e11 and \
+                    SH.MassType_BH between 1.0e10 and 1.0e13 and \
                     AP.Mass_Star between 1.0e10 and 2.0e11 and \
                     SH.StarFormationRate between 0.1 and 15 and \
-                    SH.SnapNum = 28 and \
                     SH.Image_face IS NOT null\
                 ORDER BY \
                     AP.Mass_Star"%( sim_name , sim_name, sim_name)
@@ -58,6 +58,6 @@ for sim_name in mySims:
     df['name1']=df['name1'].str.replace('http://virgodb.cosma.dur.ac.uk/eagle-webstorage/'+sim_name+'_Subhalo/', '')
     df=df.assign(filename = lambda x: sim_name +'' + x.name1)
     df['image']=df.apply(lambda x: download_image(x.face, x.filename, sim_name), axis=1)
-    df.to_csv('EAGLEimagesdf'+sim_name+'.csv')
+    df.to_csv('EAGLEimagesevolutiondf'+sim_name+'.csv')
     print(df['image'])
 
