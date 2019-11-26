@@ -66,7 +66,7 @@ def twocomponentmodel(r, I_e, R_e, n):
 	return I1+I2
 
 def findbulge(image, imagefile):
-	#locates central bulge and diffuse halo, and marks this on the image
+	#locates central bulge and diffuse disc, and marks this on the image
 	imagecopy=image.copy()
 	median=np.median(image)
 	std=np.std(image)
@@ -110,7 +110,7 @@ def findbulge(image, imagefile):
 	else:
 		((bcX, bcY), bradius) = ((0,0),0)
 	print("bulge radius:{},  bulge centre({},{})".format(bradius, bcX,bcY))
-	#find halo
+	#find disc
 	labels2 = measure.label(thresh2, neighbors=8, background=0)
 	mask2 = np.zeros(thresh2.shape, dtype="uint8")	
 	for label in np.unique(labels2):
@@ -131,7 +131,7 @@ def findbulge(image, imagefile):
 		((hcX, hcY), hradius) = cv2.minEnclosingCircle(c)
 	else:
 		((hcX, hcY), hradius) = ((0,0),0)
-	print("halo radius:{}, halo centre({},{})".format(hradius, hcX,hcY))
+	print("disc radius:{}, disc centre({},{})".format(hradius, hcX,hcY))
 	return bradius,hradius, (hcX,hcY), (bcX,bcY)
 
 def run_radial_profile(image, imagefile, sim_name):
@@ -163,31 +163,30 @@ def run_radial_profile(image, imagefile, sim_name):
 	bhindex=int((bindex+hindex)/2)
 
 	
-
-
-	popthaloa, pcovhaloa=curve_fit(SersicProfilea, r[bindex:hindex], rad[bindex:hindex], p0=(i_e, r_e, 1,0), bounds=((i_e-1,r_e-0.1,0,0), (i_e+1,r_e+0.1,2,20)), sigma=stdbins[bindex:hindex], absolute_sigma=True)
-	n_haloa=popthaloa[2]
-	print("I_ehaloa={}, R_ehaloa={}, n_haloa={}, ahaloa={}".format(popthaloa[0], popthaloa[1], n_haloa, popthaloa[3]))
-	isolated_halosima=SersicProfilea(r, popthaloa[0], popthaloa[1],n_haloa,popthaloa[3])
-	isolated_bulgea= rad - isolated_halosima
+	
+	poptdisca, pcovdisca=curve_fit(SersicProfilea, r[bindex:hindex], rad[bindex:hindex], p0=(i_e, r_e, 1,0), bounds=((i_e-1,r_e-0.1,0,0), (i_e+1,r_e+0.1,2,20)), sigma=stdbins[bindex:hindex], absolute_sigma=True)
+	n_disca=poptdisca[2]
+	print("I_edisca={}, R_edisca={}, n_disca={}, adisca={}".format(poptdisca[0], poptdisca[1], n_disca, poptdisca[3]))
+	isolated_discsima=SersicProfilea(r, poptdisca[0], poptdisca[1],n_disca,poptdisca[3])
+	isolated_bulgea= rad - isolated_discsima
 	isolated_bulgea[isolated_bulgea<0]=0
 	i_ebulgea, r_ebulgea, centralbrightnessbulgea, totalbrightnessbulgea= findeffectiveradius(isolated_bulgea[0:bhindex], r[0:bhindex], nr[0:bhindex]) 
 	poptbulgea, pcovbulgea=curve_fit(SersicProfilea, r[0:bindex], isolated_bulgea[0:bindex], p0=(i_ebulgea, r_ebulgea, 4,0), bounds=((i_ebulgea-1,r_ebulgea-0.1,0,0), (i_ebulgea+1,r_ebulgea+0.1,8,20)), sigma=stdbins[0:bindex], absolute_sigma=True)
 	n_bulgea= poptbulgea[2]
 	isolated_bulgesima= SersicProfilea(r, poptbulgea[0], poptbulgea[1], n_bulgea, poptbulgea[3])
 	isolated_bulgesima[bindex:]=0
-	totalsima=isolated_bulgesima+isolated_halosima
+	totalsima=isolated_bulgesima+isolated_discsima
 	print("I_ebulgea={}, R_ebulgea={}, n_bulgea={}, abulgea={}".format(poptbulgea[0],poptbulgea[1], n_bulgea, poptbulgea[2]))
 
 
 
 
-	popthalo, pcovhalo = curve_fit(lambda x,n: SersicProfile(x, i_e, r_e, n), r[bindex:bhindex], rad[bindex:bhindex], sigma=stdbins[bindex:bhindex], bounds=(0,2), absolute_sigma=True)
-	n_halo=popthalo[0]
-	n_halo_error=pcovhalo[0,0]
-	print("I_ehalo={}, R_ehalo={}, n_halo={}".format(i_e, r_e, n_halo))
-	isolated_halosim=SersicProfile(r, i_e, r_e, n_halo)
-	isolated_bulge= rad - isolated_halosim
+	poptdisc, pcovdisc = curve_fit(lambda x,n: SersicProfile(x, i_e, r_e, n), r[bindex:bhindex], rad[bindex:bhindex], sigma=stdbins[bindex:bhindex], bounds=(0,2), absolute_sigma=True)
+	n_disc=poptdisc[0]
+	n_disc_error=pcovdisc[0,0]
+	print("I_edisc={}, R_edisc={}, n_disc={}".format(i_e, r_e, n_disc))
+	isolated_discsim=SersicProfile(r, i_e, r_e, n_disc)
+	isolated_bulge= rad - isolated_discsim
 	isolated_bulge[isolated_bulge<0]=0
 	i_ebulge, r_ebulge, centralbrightnessbulge, totalbrightnessbulge= findeffectiveradius(isolated_bulge[0:bhindex], r[0:bhindex], nr[0:bhindex]) 
 	poptbulge, pcovbulge = curve_fit(lambda x,n: SersicProfile(x, i_ebulge, r_ebulge, n), r[0:bindex], isolated_bulge[0:bindex],p0=4, sigma=stdbins[0:bindex], bounds=(0,10), absolute_sigma=True)
@@ -196,61 +195,72 @@ def run_radial_profile(image, imagefile, sim_name):
 	print("I_ebulge={}, R_ebulge={}, n_bulge={}".format(i_ebulge,r_ebulge, n_bulge))
 	isolated_bulgesim= SersicProfile(r, i_ebulge, r_ebulge, n_bulge)
 	isolated_bulgesim[bindex:]=0
-	totalsim=isolated_bulgesim+isolated_halosim
+	totalsim=isolated_bulgesim+isolated_discsim
 
-	"""
 
-	#chi vs n for n_halo
-	chis1=[]
-	for n in np.linspace(0.1,20.0, 40):
-		res= r[bindex:hindex] - SersicProfile(rad[bindex:hindex], i_e, r_e, n)
-		chi=np.sqrt(sum((res/stdbins[bindex:hindex])**2))
-		chis1.append(chi)
-	plt.plot(np.linspace(0.1,20.0, 40), chis1)
-	plt.show()
+	#chi vs n for n_disc
+	chisdisc=[]
+	chisbulge=[]
+	ndisc=[]
+	nbulge=[]
+	chisdisca=[]
+	chisbulgea=[]
+	ndisca=[]
+	nbulgea=[]
+	ntot=[]
+	chistot=[]
+	for n in np.linspace(0.15,5.0, 200):
+		n1, pcov1 = curve_fit(lambda x,n: SersicProfile(x, i_e, r_e, n), r, rad, p0=n, bounds=(n-0.001,n+0.001), sigma=stdbins, absolute_sigma=True)
+		n1=n1[0]
+		n1_error=pcov1[0,0]
 
-	chis2=[]
-	for n in np.linspace(0.1,1.0, 40):
-		res= r - SersicProfile(isolated_bulge, i_e, r_e, n)
-		chi=np.sqrt(sum(np.abs((res/stdbins)**2)))
-		chis2.append(chi)
-	plt.plot(np.linspace(0.1,1.0, 40), chis2)
-	plt.show()
+		poptdisc, pcovdisc = curve_fit(lambda x,n: SersicProfile(x, i_e, r_e, n), r[bindex:bhindex], rad[bindex:bhindex], sigma=stdbins[bindex:bhindex], p0=n, bounds=(n-0.001,n+0.001), absolute_sigma=True)
+		n_disc=poptdisc[0]
+		n_disc_error=pcovdisc[0,0]
+		poptbulge, pcovbulge = curve_fit(lambda x,n: SersicProfile(x, i_ebulge, r_ebulge, n), r[0:bindex], isolated_bulge[0:bindex],p0=n, sigma=stdbins[0:bindex], bounds=(n-0.001,n+0.001), absolute_sigma=True)
+		n_bulge= poptbulge[0]
+		n_bulge_error= pcovbulge[0,0]
 	
-	chis3=[]
-	for n in np.linspace(0.1,20.0, 40):
-		res= r[bindex:hindex] - SersicProfilea(rad[bindex:hindex], popthaloa[0], popthaloa[1], n, popthaloa[3])
-		chi=np.sqrt(sum((res/stdbins[bindex:hindex])**2))
-		chis3.append(chi)
-	plt.plot(np.linspace(0.1,20.0, 40), chis3)
-	plt.show()
+		poptdisca, pcovdisca=curve_fit(SersicProfilea, r[bindex:hindex], rad[bindex:hindex], p0=(i_e, r_e, n,0), bounds=((i_e-1,r_e-0.1,n-0.001,0), (i_e+1,r_e+0.1,n+0.001,20)), sigma=stdbins[bindex:hindex], absolute_sigma=True)
+		n_disca=poptdisca[2]
+		n_disc_errora=pcovdisca[2,2]
+		poptbulgea, pcovbulgea=curve_fit(SersicProfilea, r[0:bindex], isolated_bulgea[0:bindex], p0=(i_ebulgea, r_ebulgea, n,0), bounds=((i_ebulgea-1,r_ebulgea-0.1,n-0.001,0), (i_ebulgea+1,r_ebulgea+0.1,n+0.001,20)), sigma=stdbins[0:bindex], absolute_sigma=True)
+		n_bulgea= poptbulgea[2]
+		n_bulge_errora=pcovdisca[2,2]
 
-	chis4=[]
-	for n in np.linspace(0.1,1.0, 40):
-		res= r - SersicProfilea(isolated_bulgea, i_e, r_e, n, poptbulgea[3])
-		chi=np.sqrt(sum((res/stdbins)**2))
-		chis4.append(chi)
-	plt.plot(np.linspace(0.1,1.0, 40), chis4)
+		#res= r[bindex:hindex] - isolated_discsim[bindex:hindex]
+		#chi=np.sqrt(sum((res/stdbins[bindex:hindex])**2))
+		chisdisc.append(n_disc_error)
+		chisbulge.append(n_bulge_error)
+		ndisc.append(n_disc)
+		nbulge.append(n_bulge)
+		chisdisca.append(n_disc_errora)
+		chisbulgea.append(n_bulge_errora)
+		ndisca.append(n_disca)
+		nbulgea.append(n_bulgea)
+		ntot.append(n1)
+		chistot.append(n1_error)
+	chisdisca=np.array(chisdisca)
+	plt.plot(ntot, chistot, label='ntot')
+	plt.plot(ndisca, chisdisca+0.01, label='ndisca')
+	plt.plot(nbulgea, chisbulgea,label='nbulgea')
+	plt.plot(ndisc, chisdisc, label='ndisc')
+	plt.plot(nbulge, chisbulge,label='nbulge')
+	plt.legend()
+	plt.yscale('log')
+	plt.xlabel('n'), plt.ylabel('$\chi ^2$')#, plt.ylim(0,0.025)
+	plt.title('Plot of $\chi ^2$ generated for each n')
+	plt.tight_layout()
+	plt.savefig('galaxygraphsbin'+sim_name+'/chisqrdvsn'+imagefile)
 	plt.show()
+	exit()
 
-	
-	
-	#chi vs n for n_total
-	chis5=[]
-	for n in np.linspace(0.1,20.0, 40):
-		res= r - SersicProfile(rad, i_e, r_e, n)
-		chi=np.sqrt(sum((res/stdbins)**2))
-		chis5.append(chi)
-	plt.plot(np.linspace(0.1,20.0, 40), chis5)
-	plt.show()
-
-	"""
 
 	fig=plt.figure(figsize=(15,8))
 
 	plt.subplot(321)
 	n1, pcov1 = curve_fit(lambda x,n: SersicProfile(x, i_e, r_e, n), r, rad, p0=2, bounds=(0.1,8), sigma=stdbins, absolute_sigma=True)
-	print("I_e={}, R_e={}, n_halo={}".format(i_e, r_e, n1))
+	print("I_e={}, R_e={}, n_disc={}".format(i_e, r_e, n1))
 	n_total=n1[0]
 	plt.errorbar(r, rad, yerr=(stdbins*2), fmt='', color='k', capsize=0.5, elinewidth=0.5)
 	plt.plot(r, SersicProfile(r,i_e, r_e, n_total +pcov1[0,0]), 'g--')
@@ -262,7 +272,7 @@ def run_radial_profile(image, imagefile, sim_name):
 
 	plt.subplot(323)
 	plt.errorbar(r, rad, yerr=(stdbins), fmt='', color='k', capsize=0.5, elinewidth=0.5, label='observed')
-	plt.errorbar(r, isolated_halosim, yerr=(np.sqrt(pcovhalo[0,0])), fmt='', color='r', capsize=0.5, elinewidth=0.5, label='halo sim, n_halo={}'.format(round(n_halo,2)))
+	plt.errorbar(r, isolated_discsim, yerr=(np.sqrt(pcovdisc[0,0])), fmt='', color='r', capsize=0.5, elinewidth=0.5, label='disc sim, n_disc={}'.format(round(n_disc,2)))
 	plt.errorbar(r, isolated_bulge, yerr=(stdbins), fmt='', color='g', capsize=0.5, elinewidth=0.5, label='bulge observed')
 	plt.errorbar(r[0:bindex], isolated_bulgesim[0:bindex], yerr=(np.sqrt(pcovbulge[0,0])), fmt='', color='b', capsize=0.5, elinewidth=0.5, label='bulge sim, n_bulge={}'.format(round(n_bulge,2)))
 	plt.plot(r[0:hindex],totalsim, color='y', label='total sim')
@@ -271,7 +281,7 @@ def run_radial_profile(image, imagefile, sim_name):
 
 	plt.subplot(325)
 	plt.errorbar(r, rad, yerr=(stdbins), fmt='', color='k', capsize=0.5, elinewidth=0.5, label='observed')
-	plt.errorbar(r, isolated_halosima, yerr=(np.sqrt(pcovhaloa[2,2])), fmt='', color='r', capsize=0.5, elinewidth=0.5, label='halo sim, n_haloa={}'.format(round(n_haloa,2)))
+	plt.errorbar(r, isolated_discsima, yerr=(np.sqrt(pcovdisca[2,2])), fmt='', color='r', capsize=0.5, elinewidth=0.5, label='disc sim, n_disca={}'.format(round(n_disca,2)))
 	plt.errorbar(r, isolated_bulgea, yerr=(stdbins), fmt='', color='g', capsize=0.5, elinewidth=0.5, label='bulge observed')
 	plt.errorbar(r[0:bindex], isolated_bulgesima[0:bindex], yerr=(np.sqrt(pcovbulgea[2,2])), fmt='', color='b', capsize=0.5, elinewidth=0.5, label='bulge sim, n_bulgea={}'.format(round(n_bulgea,2)))
 	plt.plot(r[0:hindex],totalsima, color='y', label='total sim')
@@ -285,7 +295,7 @@ def run_radial_profile(image, imagefile, sim_name):
 	plt.imshow(cv2image)
 	plt.title('image')
 	plt.tight_layout()
-	plt.savefig('galaxygraphsbin'+sim_name+'/TEST_n_halo(0.9,2)_Sersicfitradialbrightnessprofile'+imagefile)
+	plt.savefig('galaxygraphsbin'+sim_name+'/Sersicfitradialbrightnessprofile'+imagefile)
 	plt.show()
 	#plt.close()
 
@@ -331,7 +341,7 @@ def run_radial_profile(image, imagefile, sim_name):
 	plt.errorbar(r[0:hindex], rad[0:hindex], yerr=(stdbins[0:hindex]*2), fmt='', color='k', capsize=0.5, elinewidth=0.5)
 	plt.plot(r[0:bindex], SersicProfile(r[0:bindex],i_e, r_e,popt21), 'r-', label='bulge n={}'.format(round(popt21[0],2)))
 	#plt.plot(r, SersicProfile(r,i_e, r_e, popt2 +pcov2[0,0]), 'g--')
-	plt.plot(r[bindex:hindex], SersicProfile(r[bindex:hindex],i_e, r_e, popt22), 'g', label='halo n={} free'.format(round(popt22[0],2)))
+	plt.plot(r[bindex:hindex], SersicProfile(r[bindex:hindex],i_e, r_e, popt22), 'g', label='disc n={} free'.format(round(popt22[0],2)))
 	#plt.plot(r, SersicProfile(r,i_e, r_e, popt2 -pcov2[0,0]) , 'g--')
 	#plt.fill_between(r, SersicProfile(r,i_e, r_e, popt2 -pcov2[0,0]**0.5), SersicProfile(r,i_e, r_e, popt2 +pcov2[0,0]**0.5), facecolor='gray', alpha=0.5)
 	plt.title('Radius vs Pixel intensity'), plt.xlabel('Radius (kpc)'), plt.ylabel('Intensity'), plt.xlim(0), plt.ylim(0,250)
@@ -358,10 +368,10 @@ def run_radial_profile(image, imagefile, sim_name):
 	"""
 
 if __name__ == "__main__":
-	#sim_name=['RecalL0025N0752','']
-	#imagefileRecalL0025N0752=['RecalL0025N0752galface_621500.png','']
-	sim_name=['RecalL0025N0752', 'RefL0025N0376','RefL0050N0752']
-	imagefileRecalL0025N0752=['RecalL0025N0752galface_4938.png','RecalL0025N0752galface_621500.png','RecalL0025N0752galface_726306.png','RecalL0025N0752galface_51604.png']
+	sim_name=['RecalL0025N0752','']
+	imagefileRecalL0025N0752=['RecalL0025N0752galface_646493.png','']
+	#sim_name=['RecalL0025N0752', 'RefL0025N0376','RefL0050N0752']
+	#imagefileRecalL0025N0752=['RecalL0025N0752galface_646493.png','RecalL0025N0752galface_737885.png','RecalL0025N0752galface_746518.png','RecalL0025N0752galface_853401.png','RecalL0025N0752galface_4938.png','RecalL0025N0752galface_621500.png','RecalL0025N0752galface_726306.png','RecalL0025N0752galface_51604.png']
 	imagefileRefL0025N0376=['RefL0025N0376galface_1.png','RefL0025N0376galface_135107.png','RefL0025N0376galface_154514.png','RefL0025N0376galface_160979.png','RefL0025N0376galface_172979.png']
 	imagefileRefL0050N0752=['RefL0050N0752galface_2273534.png','RefL0050N0752galface_2276263.png','RefL0050N0752galface_514258.png','RefL0050N0752galface_2355640.png','RefL0050N0752galface_2639531.png']
 
