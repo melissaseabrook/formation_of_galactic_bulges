@@ -11,6 +11,10 @@ import pandas as pd
 import seaborn as sns
 from scipy import stats
 from mpl_toolkits.mplot3d import Axes3D
+from matplotlib import cm
+from mpl_toolkits.mplot3d import axes3d
+from scipy.interpolate import griddata 
+
 
 def sigmaclip(image, sigma, box_size):
     #shows relative fluctuations in pixel intensities
@@ -300,16 +304,80 @@ def removeoutlierscolumn(df, column_name, sigma):
     df=df[np.abs(df[column_name]-df[column_name].mean())<=(sigma*df[column_name].std())]
     return df
 
+
+def invert(var):
+    if var != 0:
+        return(1/var)*10
+    else:
+        return 0
+
+
 def threeDplot(df, x,y,z, column_size, column_colour):
+    df['BHmassbin']=pd.cut(df.logBHmass, 7)
+    df['BHmasscounts']=df.groupby('BHmassbin')['BHmassbin'].transform('count')
+    df['fracofbin']=df.apply(lambda x: (x.BHmasscounts), axis=1)
+    print(df[['logBHmass','BHmassbin', 'BHmasscounts', 'fracofbin']])
     fig=plt.figure()
-    size=100*(df[column_size])/(df[column_size].max())
-    ax=fig.add_subplot(111, projection='3d')
+    minx=df[x].min()
+    miny=df[y].min()
+    minz=df[z].min()
+    maxx=df[x].max()
+    maxy=df[y].max()
+    maxz=df[z].max()
+    size=70*(df[column_size])/(df[column_size].max())
+    ax = fig.gca(projection='3d')
     norm=plt.Normalize(df[column_colour].min(), df[column_colour].max())
     sm=plt.cm.ScalarMappable(cmap='autumn', norm=norm)
     sm.set_array([])
     ax.scatter(df[x],df[y],df[z], c=sm.to_rgba(df[column_colour]), s=size)
+    
+    xi = np.linspace(minx, maxx, 100)
+    yi = np.linspace(miny, maxy, 100)
+    zi = np.linspace(minz, maxz, 100)
+    """
+    hist, binx, biny=np.histogram2d(df[x], df[y],  bins=5, weights=df['fracofbin'])
+    X = np.linspace(minx, maxx, hist.shape[0])
+    Y = np.linspace(miny, maxy, hist.shape[1])
+    X,Y=np.meshgrid(X,Y)
+    ax.contourf(X,Y,hist, zdir='z', offset=minz, cmap=cm.YlOrRd, alpha=0.6)
+    
+    hist, binx, biny=np.histogram2d(df[x], df[z], bins=5, weights=df['fracofbin'])
+    X = np.linspace(minx, maxx, hist.shape[0])
+    Z = np.linspace(minz, maxz, hist.shape[1])
+    X,Z=np.meshgrid(X,Z)
+    ax.contourf(X,hist,Z, zdir='y', offset=maxy, cmap=cm.YlOrRd, alpha=0.6)
+
+    hist, binx, biny=np.histogram2d(df[y], df[z], bins=5, weights=df['fracofbin'])
+    Y = np.linspace(miny, maxy, hist.shape[0])
+    Z = np.linspace(minz, maxz, hist.shape[1])
+    Z,Y=np.meshgrid(Z,Y)
+    ax.contourf(hist,Y,Z, zdir='x', offset=minx, cmap=cm.YlOrRd, alpha=0.6)
+    """
+    
+    C1 = griddata((df[x], df[y]), df[column_colour]/df['fracofbin'], (xi[None,:], yi[:,None]), method='linear')
+    X1, Y1 = np.meshgrid(xi, yi)
+    ax.contourf(X1, Y1, C1, zdir='z', offset=minz, cmap=cm.YlOrRd, alpha=0.4)
+    
+    C2 = griddata((df[y], df[z]), df[column_colour]/df['fracofbin'], (yi[None,:], zi[:,None]), method='linear')
+    Y2, Z2 = np.meshgrid(yi, zi)
+    ax.contourf(C2, Y2, Z2, zdir='x', offset=minx, cmap=cm.YlOrRd, alpha=0.4)
+    
+
+    C3 = griddata((df[x], df[z]), df[column_colour]/df['fracofbin'], (xi[None,:], zi[:,None]), method='linear')
+    X3, Z3 = np.meshgrid(xi, zi)
+    ax.contourf(X3, C3, Z3, zdir='y', offset=maxy, cmap=cm.YlOrRd, alpha=0.4)
+    
+    #ax.scatter(df[x], df[y],  zdir='z', zs=minz, c=sm1.to_rgba(df[column_colour]), marker='*',s=size)
+    #ax.scatter(df[y], df[z], zdir='x', zs=minx, c=sm2.to_rgba(df[column_colour]), s=size)
+    #ax.scatter(df[x], df[z], zdir='y', zs=maxy,  c=sm3.to_rgba(df[column_colour]), s=size)
+    
+    
+    ax.set_xlim(minx,maxx)
+    ax.set_ylim(miny,maxy)
+    ax.set_zlim(minz,maxz)
     fig.colorbar(sm).set_label(column_colour)
     ax.set_xlabel(x), ax.set_ylabel(y),ax.set_zlabel(z)
+
     plt.show()
 
 def colorbarplot(df, x,y, column_size, column_colour, column_marker):
@@ -326,17 +394,18 @@ def colorbarplot(df, x,y, column_size, column_colour, column_marker):
     ax.savefig('galaxygraphsbin'+sim_name+'/'+x+'vs'+y+'.png')
     plt.show()
 
-def stackedhistogram(df, param1, param2, param3, param4, param5, param6):
+def stackedhistogram(df, param1, param2, param3, param4):
     plt.subplot(211)
-    labels=[param1, param2, param3, param4, param5, param6]
+    colors=['r','blue','green','purple']
+    labels=[param1, param2, param3, param4]
     plt.title('Histograms of Sersic Indices and Errors')
-    plt.hist([df[param1],df[param2],df[param3],df[param4],df[param5],df[param6]], bins=100, histtype='step', stacked=True, fill=False)
+    plt.hist([df[param1],df[param2],df[param3],df[param4]], bins=50, histtype='step', stacked=True, fill=False, color=colors, label=labels)
     plt.xlabel('Sersic Index')
     
     plt.subplot(212)
-    plt.hist([df[param1+'_error'],df[param2+'_error'],df[param3+'_error'],df[param4+'_error'],df[param5+'_error'],df[param6+'_error']], bins=100, histtype='step', stacked=True, fill=False)
+    plt.hist([df[param1+'_error'],df[param2+'_error'],df[param3+'_error'],df[param4+'_error']], bins=50, histtype='step', stacked=True, fill=False, color=colors, label=labels)
     plt.xlabel('Error')
-    plt.legend(labels)
+    plt.legend()
     plt.savefig('galaxygraphsbin'+sim_name+'/histogramofsersicindices.png')
     plt.show()
 
@@ -390,41 +459,49 @@ def subplothistograms(df, param1, param2, param3, param4, param5, param6):
 def plotbulgetodisc(df, sim_name):
 
     print(df.shape)
-    drop_numerical_outliers(df, 3)
+    drop_numerical_outliers(df, 2)
 
     print(df.shape)
-    df=df[df.n_total_error<2]
+    df=df[df.n_total_error<10]
+    print(df.shape)
+    #df=df[df.n_bulgea_error<10]
+    print(df.shape)
+    #df=df[df.n_bulge_exp_error<10]
+    print(df.shape)
+
+    #df=df[df.n_bulge_error<10]
+    print(df.shape)
+    #df=df[df.n_disca_error<10]
     
     print(df.shape)
-    #df=df[df.n_total>0.1]
-    #print(df.shape)
+    df=df[df.n_total>0.05]
     df['sSFR']=df.apply(lambda x: (x.SFR/x.mass), axis=1)
     df=removeoutlierscolumn(df, 'sSFR', 2)
-    print(df.shape)
+    df=removeoutlierscolumn(df, 'mass', 2)
     df=df[df.sSFR>0]
     print(df.shape)
 
-    df['logsSFR']=df.apply(lambda x: np.log(x.sSFR), axis=1)
-    df['logBHmass']=df.apply(lambda x: np.log(x.BHmass), axis=1)
-    df['logmass']=df.apply(lambda x: np.log(x.mass), axis=1)
-
-    
-    
+    df['logsSFR']=df.apply(lambda x: np.log10(x.sSFR), axis=1)
+    df['logBHmass']=df.apply(lambda x: np.log10(x.BHmass), axis=1)
+    df['logmass']=df.apply(lambda x: np.log10(x.mass), axis=1)
     df['sSFR']=df.apply(lambda x: (x.SFR/x.mass), axis=1)
-    df['logsSFR']=df.apply(lambda x: np.log(x.sSFR), axis=1)
-    df['logBHmass']=df.apply(lambda x: np.log(x.BHmass), axis=1)
-    df['logmass']=df.apply(lambda x: np.log(x.mass), axis=1)
-    
-    colorbarplot(df, 'n_total', 'DiscToTotal', 'logmass', 'logsSFR', 'BHmass')
-    plt.close()
+    df['logsSFR']=df.apply(lambda x: np.log10(x.sSFR), axis=1)
+    df['logBHmass']=df.apply(lambda x: np.log10(x.BHmass), axis=1)
+    df['logmass']=df.apply(lambda x: np.log10(x.mass), axis=1)
 
-    #threeDplot(df, 'n_total','DiscToTotal','logBHmass', 'logmass', 'logsSFR')
+    #stackedhistogram(df, 'n_total','n_disc','n_bulge','n_bulge_exp')
+    #subplothistograms(df, 'n_total','n_disc','n_bulge','n_disca','n_bulgea','n_bulge_exp')
+
+    df['dtototal']=df.apply(lambda x: (1-x.btdintensity), axis=1)
+    #colorbarplot(df, 'n_total', 'DiscToTotal', 'logmass', 'logsSFR', 'BHmass')
+    threeDplot(df, 'dtototal','DiscToTotal','logBHmass', 'mass', 'logsSFR')
+    exit()
     
     df['dtbradius']=df.apply(lambda x: invertbtd(x.btdradius), axis=1)
     df['dtbintensity']=df.apply(lambda x: invertbtd(x.btdintensity), axis=1)
     df['ZBin']=pd.qcut(df.Z, 6)
     
-
+    """
     size=100*(df.mass)/(df.mass.max())
     g=sns.PairGrid(df, vars=['DiscToTotal','dtbradius','dtbintensity','n_total','n_disca','n_disc','n_bulgea','n_bulge','SFR', 'BHmass'])
     g.map_diag(sns.kdeplot)
@@ -451,13 +528,12 @@ def plotbulgetodisc(df, sim_name):
     g.savefig('galaxygraphsbin'+sim_name+'/selectedbulgeparametersrelationships.png')
     plt.show()
     plt.close()
-    
+   """ 
    
     stackedhistogram(df, 'n_total','n_disc','n_bulge','n_disca','n_bulgea','n_bulge_exp')
     plt.close()
     subplothistograms(df, 'n_total','n_disc','n_bulge','n_disca','n_bulgea','n_bulge_exp')
     plt.close()
-    
     
     fig=plt.figure()
     ax0=fig.add_subplot(221)
@@ -476,7 +552,7 @@ def plotbulgetodisc(df, sim_name):
 
 if __name__ == "__main__":
     sim_name='RecalL0025N0752'
-    read_data=False
+    read_data=True
     if(read_data):
         print('.........reading.......')
         df=pd.read_csv('EAGLEbulgedisc'+sim_name+'.csv')
