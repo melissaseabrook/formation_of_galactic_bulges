@@ -313,9 +313,9 @@ def invert(var):
 
 
 def threeDplot(df, x,y,z, column_size, column_colour):
-    df['BHmassbin']=pd.cut(df.logBHmass, 7)
+    df['BHmassbin']=pd.cut(df.logBHmass, 10)
     df['BHmasscounts']=df.groupby('BHmassbin')['BHmassbin'].transform('count')
-    df['fracofbin']=df.apply(lambda x: (x.BHmasscounts), axis=1)
+    df['fracofbin']=df.apply(lambda x: (10.0/x.BHmasscounts), axis=1)
     print(df[['logBHmass','BHmassbin', 'BHmasscounts', 'fracofbin']])
     fig=plt.figure()
     minx=df[x].min()
@@ -334,14 +334,14 @@ def threeDplot(df, x,y,z, column_size, column_colour):
     xi = np.linspace(minx, maxx, 100)
     yi = np.linspace(miny, maxy, 100)
     zi = np.linspace(minz, maxz, 100)
-    """
-    hist, binx, biny=np.histogram2d(df[x], df[y],  bins=5, weights=df['fracofbin'])
+    
+    hist, binx, biny=np.histogram2d(df[y], df[x],  bins=5, weights=df['fracofbin'])
     X = np.linspace(minx, maxx, hist.shape[0])
     Y = np.linspace(miny, maxy, hist.shape[1])
     X,Y=np.meshgrid(X,Y)
     ax.contourf(X,Y,hist, zdir='z', offset=minz, cmap=cm.YlOrRd, alpha=0.6)
     
-    hist, binx, biny=np.histogram2d(df[x], df[z], bins=5, weights=df['fracofbin'])
+    hist, binx, biny=np.histogram2d(df[z], df[x], bins=5, weights=df['fracofbin'])
     X = np.linspace(minx, maxx, hist.shape[0])
     Z = np.linspace(minz, maxz, hist.shape[1])
     X,Z=np.meshgrid(X,Z)
@@ -354,19 +354,19 @@ def threeDplot(df, x,y,z, column_size, column_colour):
     ax.contourf(hist,Y,Z, zdir='x', offset=minx, cmap=cm.YlOrRd, alpha=0.6)
     """
     
-    C1 = griddata((df[x], df[y]), df[column_colour]/df['fracofbin'], (xi[None,:], yi[:,None]), method='linear')
+    C1 = griddata((df[x], df[y]), df['fracofbin'], (xi[None,:], yi[:,None]), method='linear')
     X1, Y1 = np.meshgrid(xi, yi)
     ax.contourf(X1, Y1, C1, zdir='z', offset=minz, cmap=cm.YlOrRd, alpha=0.4)
     
-    C2 = griddata((df[y], df[z]), df[column_colour]/df['fracofbin'], (yi[None,:], zi[:,None]), method='linear')
+    C2 = griddata((df[y], df[z]), df['fracofbin'], (yi[None,:], zi[:,None]), method='linear')
     Y2, Z2 = np.meshgrid(yi, zi)
     ax.contourf(C2, Y2, Z2, zdir='x', offset=minx, cmap=cm.YlOrRd, alpha=0.4)
     
 
-    C3 = griddata((df[x], df[z]), df[column_colour]/df['fracofbin'], (xi[None,:], zi[:,None]), method='linear')
+    C3 = griddata((df[x], df[z]), df['fracofbin'], (xi[None,:], zi[:,None]), method='linear')
     X3, Z3 = np.meshgrid(xi, zi)
     ax.contourf(X3, C3, Z3, zdir='y', offset=maxy, cmap=cm.YlOrRd, alpha=0.4)
-    
+    """
     #ax.scatter(df[x], df[y],  zdir='z', zs=minz, c=sm1.to_rgba(df[column_colour]), marker='*',s=size)
     #ax.scatter(df[y], df[z], zdir='x', zs=minx, c=sm2.to_rgba(df[column_colour]), s=size)
     #ax.scatter(df[x], df[z], zdir='y', zs=maxy,  c=sm3.to_rgba(df[column_colour]), s=size)
@@ -459,21 +459,16 @@ def subplothistograms(df, param1, param2, param3, param4, param5, param6):
 def plotbulgetodisc(df, sim_name):
 
     print(df.shape)
-    drop_numerical_outliers(df, 2)
+    drop_numerical_outliers(df, 3)
 
     print(df.shape)
     df=df[df.n_total_error<10]
     print(df.shape)
-    #df=df[df.n_bulgea_error<10]
-    print(df.shape)
     #df=df[df.n_bulge_exp_error<10]
     print(df.shape)
-
     #df=df[df.n_bulge_error<10]
     print(df.shape)
-    #df=df[df.n_disca_error<10]
-    
-    print(df.shape)
+
     df=df[df.n_total>0.05]
     df['sSFR']=df.apply(lambda x: (x.SFR/x.mass), axis=1)
     df=removeoutlierscolumn(df, 'sSFR', 2)
@@ -494,7 +489,7 @@ def plotbulgetodisc(df, sim_name):
 
     df['dtototal']=df.apply(lambda x: (1-x.btdintensity), axis=1)
     #colorbarplot(df, 'n_total', 'DiscToTotal', 'logmass', 'logsSFR', 'BHmass')
-    threeDplot(df, 'dtototal','DiscToTotal','logBHmass', 'mass', 'logsSFR')
+    threeDplot(df, 'n_total','DiscToTotal','logBHmass', 'mass', 'logsSFR')
     exit()
     
     df['dtbradius']=df.apply(lambda x: invertbtd(x.btdradius), axis=1)
