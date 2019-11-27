@@ -11,8 +11,9 @@ import pandas as pd
 dir_base=os.getcwd()
 con = sql.connect("hwg083", password="KJHjqm91")
 def download_image(url, filename, sim_name, querytype):
+    print(filename)
     if url == '':
-        return
+        return('')
     else:
         urllib.request.urlretrieve(url, 'evolvinggalaxyimagebin'+''+querytype+''+sim_name+'/'+filename)
         local_path_image=os.path.join(dir_base, 'evolvinggalaxyimagebin'+''+querytype+''+sim_name+'/'+filename)
@@ -45,14 +46,15 @@ def getdata(mySims, querytype):
                     %s_Aperture as AP, \
                     %s_MorphoKinem as MK \
                 WHERE \
-                    ref.MassType_Star between 2.0e10 and 7.0e10 and \
+                    ref.MassType_Star between 1.0e10 and 8.0e10 and \
                     ref.StarFormationRate between 0.1 and 15 and \
-                    ref.MassType_BH between 2.0e6 and 7.0e6 and \
+                    ref.MassType_BH between 1.0e6 and 1.0e7 and \
                     ref.SnapNum=28 and \
                     ((SH.SnapNum > ref.SnapNum and ref.GalaxyID between SH.GalaxyID and SH.TopLeafID) or (SH.SnapNum <= ref.SnapNum and SH.GalaxyID between ref.GalaxyID and ref.TopLeafID)) and \
                     SH.GalaxyID = AP.GalaxyID and \
                     SH.GalaxyID = MK.GalaxyID and \
-                    AP.ApertureSize = 30\
+                    AP.ApertureSize = 30 and\
+                    ref.Image_face IS NOT null\
                 ORDER BY \
                     SH.Redshift"%( sim_name , sim_name, sim_name, sim_name)
 
@@ -75,14 +77,15 @@ def getdata(mySims, querytype):
                     %s_Aperture as AP, \
                     %s_MorphoKinem as MK \
                 WHERE \
-                    ref.MassType_Star between 2.0e10 and 7.0e10 and \
+                    ref.MassType_Star between 1.0e10 and 8.0e10 and \
                     ref.StarFormationRate between 0.1 and 15 and \
-                    ref.MassType_BH between 2.0e6 and 7.0e6 and \
+                    ref.MassType_BH between 1.0e6 and 1.0e7 and \
                     ref.SnapNum=28 and \
                     SH.GalaxyID between ref.GalaxyID and ref.LastProgID and \
                     SH.GalaxyID = AP.GalaxyID and \
                     SH.GalaxyID = MK.GalaxyID and \
-                    AP.ApertureSize = 30\
+                    AP.ApertureSize = 30 and\
+                    ref.Image_face IS NOT null\
                 ORDER BY \
                     ref.GalaxyID, \
                     SH.Redshift"%( sim_name , sim_name, sim_name, sim_name)
