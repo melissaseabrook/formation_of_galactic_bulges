@@ -15,6 +15,8 @@ from matplotlib import cm
 from mpl_toolkits.mplot3d import axes3d
 from scipy.interpolate import griddata 
 
+sns.set_style('whitegrid')
+
 
 def sigmaclip(image, sigma, box_size):
     #shows relative fluctuations in pixel intensities
@@ -282,18 +284,16 @@ def removeoutlierscolumn(df, column_name, sigma):
     df=df[np.abs(df[column_name]-df[column_name].mean())<=(sigma*df[column_name].std())]
     return df
 
-
 def invert(var):
     if var != 0:
         return(1/var)*10
     else:
         return 0
 
-
 def threeDplot(df, x,y,z, column_size, column_colour):
-    df['BHmassbin']=pd.cut(df.logBHmass, 7)
+    df['BHmassbin']=pd.cut(df.logBHmass, 10)
     df['BHmasscounts']=df.groupby('BHmassbin')['BHmassbin'].transform('count')
-    df['fracofbin']=df.apply(lambda x: (x.BHmasscounts), axis=1)
+    df['fracofbin']=df.apply(lambda x: (10.0/x.BHmasscounts), axis=1)
     print(df[['logBHmass','BHmassbin', 'BHmasscounts', 'fracofbin']])
     fig=plt.figure()
     minx=df[x].min()
@@ -312,6 +312,24 @@ def threeDplot(df, x,y,z, column_size, column_colour):
     xi = np.linspace(minx, maxx, 100)
     yi = np.linspace(miny, maxy, 100)
     zi = np.linspace(minz, maxz, 100)
+    
+    hist, binx, biny=np.histogram2d(df[y], df[x],  bins=5, weights=df['fracofbin'])
+    X = np.linspace(minx, maxx, hist.shape[0])
+    Y = np.linspace(miny, maxy, hist.shape[1])
+    X,Y=np.meshgrid(X,Y)
+    ax.contourf(X,Y,hist, zdir='z', offset=minz, cmap=cm.YlOrRd, alpha=0.6)
+    
+    hist, binx, biny=np.histogram2d(df[z], df[x], bins=5, weights=df['fracofbin'])
+    X = np.linspace(minx, maxx, hist.shape[0])
+    Z = np.linspace(minz, maxz, hist.shape[1])
+    X,Z=np.meshgrid(X,Z)
+    ax.contourf(X,hist,Z, zdir='y', offset=maxy, cmap=cm.YlOrRd, alpha=0.6)
+
+    hist, binx, biny=np.histogram2d(df[y], df[z], bins=5, weights=df['fracofbin'])
+    Y = np.linspace(miny, maxy, hist.shape[0])
+    Z = np.linspace(minz, maxz, hist.shape[1])
+    Z,Y=np.meshgrid(Z,Y)
+    ax.contourf(hist,Y,Z, zdir='x', offset=minx, cmap=cm.YlOrRd, alpha=0.6)
     """
     hist, binx, biny=np.histogram2d(df[x], df[y],  bins=5, weights=df['fracofbin'])
     X = np.linspace(minx, maxx, hist.shape[0])
@@ -332,16 +350,16 @@ def threeDplot(df, x,y,z, column_size, column_colour):
     ax.contourf(hist,Y,Z, zdir='x', offset=minx, cmap=cm.YlOrRd, alpha=0.6)
     """
     
-    C1 = griddata((df[x], df[y]), df[column_colour]/df['fracofbin'], (xi[None,:], yi[:,None]), method='linear')
+    C1 = griddata((df[x], df[y]), df['fracofbin'], (xi[None,:], yi[:,None]), method='linear')
     X1, Y1 = np.meshgrid(xi, yi)
     ax.contourf(X1, Y1, C1, zdir='z', offset=minz, cmap=cm.YlOrRd, alpha=0.4)
     
-    C2 = griddata((df[y], df[z]), df[column_colour]/df['fracofbin'], (yi[None,:], zi[:,None]), method='linear')
+    C2 = griddata((df[y], df[z]), df['fracofbin'], (yi[None,:], zi[:,None]), method='linear')
     Y2, Z2 = np.meshgrid(yi, zi)
     ax.contourf(C2, Y2, Z2, zdir='x', offset=minx, cmap=cm.YlOrRd, alpha=0.4)
     
 
-    C3 = griddata((df[x], df[z]), df[column_colour]/df['fracofbin'], (xi[None,:], zi[:,None]), method='linear')
+    C3 = griddata((df[x], df[z]), df['fracofbin'], (xi[None,:], zi[:,None]), method='linear')
     X3, Z3 = np.meshgrid(xi, zi)
     ax.contourf(X3, C3, Z3, zdir='y', offset=maxy, cmap=cm.YlOrRd, alpha=0.4)
     
@@ -384,7 +402,7 @@ def stackedhistogram(df, param1, param2, param3, param4):
     plt.hist([df[param1+'_error'],df[param2+'_error'],df[param3+'_error'],df[param4+'_error']], bins=50, histtype='step', stacked=True, fill=False, color=colors, label=labels)
     plt.xlabel('Error')
     plt.legend()
-    plt.savefig('evolvinggalaxygraphsbinmainbranch'+sim_name+'/histogramofsersicindices.png')
+    plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/histogramofsersicindices.png')
     plt.show()
 
 def subplothistograms(df, param1, param2, param3, param4, param5, param6):
@@ -434,28 +452,30 @@ def subplothistograms(df, param1, param2, param3, param4, param5, param6):
     plt.tight_layout()
     plt.show()
 
+def evolutionplot(df, param, param_size):
+    sns.scatterplot(x='z',y=param, hue='ProjGalaxyID',data=df, size=param_size, palette=sns.color_palette('hls', df.ProjGalaxyID.nunique()), legend=False)
+    sns.lineplot(x='z',y=param, hue='ProjGalaxyID',data=df, palette=sns.color_palette('hls', df.ProjGalaxyID.nunique()))
+    plt.legend(bbox_to_anchor=(1.01,0.5), loc='center left')
+    plt.xlim(0,1.2)
+    plt.title('Evolution of '+param+' sized by'+param_size)
+    plt.tight_layout()
+    plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/evolution of'+param+'.png')
+    
+    plt.show()
+
 def plotbulgetodisc(df, sim_name):
-
+    dftotal=df
     print(df.shape)
-    drop_numerical_outliers(df, 2)
-
+    drop_numerical_outliers(df, 3)
     print(df.shape)
     df=df[df.n_total_error<10]
     print(df.shape)
-    #df=df[df.n_bulgea_error<10]
-    print(df.shape)
-    #df=df[df.n_bulge_exp_error<10]
-    print(df.shape)
-
-    #df=df[df.n_bulge_error<10]
-    print(df.shape)
-    #df=df[df.n_disca_error<10]
-    
-    print(df.shape)
     df=df[df.n_total>0.05]
+    df=df.reset_index()
+    print(df.shape)
     df['sSFR']=df.apply(lambda x: (x.SFR/x.mass), axis=1)
-    df=removeoutlierscolumn(df, 'sSFR', 2)
-    df=removeoutlierscolumn(df, 'mass', 2)
+    #df=removeoutlierscolumn(df, 'sSFR', 2)
+    #df=removeoutlierscolumn(df, 'mass', 2).reset_index()
     df=df[df.sSFR>0]
     print(df.shape)
 
@@ -466,13 +486,24 @@ def plotbulgetodisc(df, sim_name):
     df['logsSFR']=df.apply(lambda x: np.log10(x.sSFR), axis=1)
     df['logBHmass']=df.apply(lambda x: np.log10(x.BHmass), axis=1)
     df['logmass']=df.apply(lambda x: np.log10(x.mass), axis=1)
+    df['dtototal']=df.apply(lambda x: (1-x.btdintensity), axis=1)
+    df['BulgeToTotal']=df.apply(lambda x: (1-x.DiscToTotal), axis=1)
+    print(df.ProjGalaxyID.nunique())
 
-    #stackedhistogram(df, 'n_total','n_disc','n_bulge','n_bulge_exp')
+    evolutionplot(df, 'mass', 'mass')
+    threeDplot(df, 'z','DiscToTotal','logBHmass', 'mass', 'logsSFR')
+    exit()
+
+    
+
+    stackedhistogram(df, 'n_total','n_disc','n_bulge','n_bulge_exp')
     #subplothistograms(df, 'n_total','n_disc','n_bulge','n_disca','n_bulgea','n_bulge_exp')
 
-    df['dtototal']=df.apply(lambda x: (1-x.btdintensity), axis=1)
+    
     #colorbarplot(df, 'n_total', 'DiscToTotal', 'logmass', 'logsSFR', 'BHmass')
     threeDplot(df, 'dtototal','DiscToTotal','logBHmass', 'mass', 'logsSFR')
+
+
     exit()
     
     df['dtbradius']=df.apply(lambda x: invertbtd(x.btdradius), axis=1)
@@ -530,7 +561,7 @@ def plotbulgetodisc(df, sim_name):
 
 if __name__ == "__main__":
     sim_name='RecalL0025N0752'
-    read_data=False
+    read_data=True
     if(read_data):
         print('.........reading.......')
         df=pd.read_csv('evolvingEAGLEbulgediscmainbranchdf'+sim_name+'.csv')
@@ -539,19 +570,29 @@ if __name__ == "__main__":
         df=pd.read_csv('evolvingEAGLEimagesmainbranchdf'+sim_name+'.csv')
         discbulgetemp=[]
         for filename in df['filename']:
-            BGRimage=cv2.imread('evolvinggalaxyimagebinmainbranch'+sim_name+'/'+filename)
-            btdradius, btdintensity, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius =findandlabelbulge(BGRimage, filename, sim_name)
-            n_total, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disc_error, n_bulge_error, n_bulge_exp_error=findsersicindex(BGRimage, bradius, hradius)
-            discbulgetemp.append([filename, btdradius, btdintensity,n_total, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disc_error, n_bulge_error, n_bulge_exp_error, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius])
+            if filename == sim_name:
+                btdradius =btdintensity=star_count=hradius=bradius=disc_intensity=bulge_intensity=btotalintensity=btotalradius =0
+                n_total=n_disc=n_bulge=n_bulge_exp=n_total_error=n_disc_error=n_bulge_error=n_bulge_exp_error=0
+                discbulgetemp.append([filename, btdradius, btdintensity,n_total, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disc_error, n_bulge_error, n_bulge_exp_error, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius])
+            
+            else:
+                BGRimage=cv2.imread('evolvinggalaxyimagebinmainbranch'+sim_name+'/'+filename)
+                btdradius, btdintensity, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius =findandlabelbulge(BGRimage, filename, sim_name)
+                n_total, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disc_error, n_bulge_error, n_bulge_exp_error=findsersicindex(BGRimage, bradius, hradius)
+                discbulgetemp.append([filename, btdradius, btdintensity,n_total, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disc_error, n_bulge_error, n_bulge_exp_error, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius])
         discbulgedf=pd.DataFrame(discbulgetemp, columns=['filename', 'btdradius', 'btdintensity','n_total','n_disc','n_bulge','n_bulge_exp', 'n_total_error', 'n_disc_error', 'n_bulge_error', 'n_bulge_exp_error', 'star_count', 'discradius', 'bulgeradius', 'disc_intensity', 'bulge_intensity', 'btotalintensity', 'btotalradius'])
+        
         df.filename.astype(str)
         discbulgedf.filename.astype(str)
-        df=pd.merge(df, discbulgedf, on=['filename'], how='outer')
+        print(discbulgedf)
+        print(df)
+        df=pd.merge(df, discbulgedf, on=['filename'], how='left').drop_duplicates()
+        print(df)
         df.to_csv('evolvingEAGLEbulgediscmainbranchdf'+sim_name+'.csv')
 
     plotbulgetodisc(df, sim_name)
 
 
-    
+    ###if image exits!!!!!
 
 
