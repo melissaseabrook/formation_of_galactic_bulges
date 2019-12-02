@@ -30,7 +30,9 @@ def radial_profile(image, center):
 	nr=np.bincount(r.ravel()) #no in each radius bin
 	radialprofile=(tbin)/(nr)
 	stdbins, bin_edges, binnumber=stats.binned_statistic(r.ravel(),image.ravel(), 'std', bins=len(radialprofile))
-	stdbins[0]=stdbins[1]
+	countbins, bin_edges, binnumber=stats.binned_statistic(r.ravel(),image.ravel(), 'count', bins=len(radialprofile))
+	#stdbins=stdbins/countbins
+	stdbins[0:4]=np.max(stdbins)
 	stdbins[stdbins<0.01]=0.01
 	radialprofile, r_arr, binnumber=stats.binned_statistic(r.ravel(),image.ravel(), 'mean', bins=len(radialprofile))
 	return radialprofile, stdbins, r_arr, nr
@@ -164,7 +166,7 @@ def run_radial_profile(image, imagefile, sim_name):
 
 	
 	
-	poptdisca, pcovdisca=curve_fit(SersicProfilea, r[bindex:hindex], rad[bindex:hindex], p0=(i_e, r_e, 1,0), bounds=((i_e-1,r_e-0.1,0,0), (i_e+1,r_e+0.1,2,20)), sigma=stdbins[bindex:hindex], absolute_sigma=True)
+	poptdisca, pcovdisca=curve_fit(SersicProfilea, r[bhindex:hindex], rad[bhindex:hindex], p0=(i_e, r_e, 1,0), bounds=((i_e-1,r_e-0.1,0,0), (i_e+1,r_e+0.1,2,20)), sigma=stdbins[bhindex:hindex], absolute_sigma=True)
 	n_disca=poptdisca[2]
 	print("I_edisca={}, R_edisca={}, n_disca={}, adisca={}".format(poptdisca[0], poptdisca[1], n_disca, poptdisca[3]))
 	isolated_discsima=SersicProfilea(r, poptdisca[0], poptdisca[1],n_disca,poptdisca[3])
@@ -209,27 +211,41 @@ def run_radial_profile(image, imagefile, sim_name):
 	nbulgea=[]
 	ntot=[]
 	chistot=[]
-	for n in np.linspace(0.15,5.0, 200):
+	for n in np.linspace(0.15,5.0, 100):
 		n1, pcov1 = curve_fit(lambda x,n: SersicProfile(x, i_e, r_e, n), r, rad, p0=n, bounds=(n-0.001,n+0.001), sigma=stdbins, absolute_sigma=True)
 		n1=n1[0]
-		n1_error=pcov1[0,0]
-
-		poptdisc, pcovdisc = curve_fit(lambda x,n: SersicProfile(x, i_e, r_e, n), r[bindex:bhindex], rad[bindex:bhindex], sigma=stdbins[bindex:bhindex], p0=n, bounds=(n-0.001,n+0.001), absolute_sigma=True)
+		res= rad - SersicProfile(r, i_e,r_e,n)
+		n1_error=np.sqrt(sum((res[bindex:bhindex]/stdbins[bindex:bhindex])**2))
+		#n1_error=pcov1[0,0]
+		
+		poptdisc, pcovdisc = curve_fit(lambda x,ni: SersicProfile(x, i_e, r_e, ni), r[bhindex:hindex], rad[bhindex:hindex], sigma=stdbins[bhindex:hindex], p0=n, bounds=(n-0.001,n+0.001), absolute_sigma=True)
 		n_disc=poptdisc[0]
-		n_disc_error=pcovdisc[0,0]
-		poptbulge, pcovbulge = curve_fit(lambda x,n: SersicProfile(x, i_ebulge, r_ebulge, n), r[0:bindex], isolated_bulge[0:bindex],p0=n, sigma=stdbins[0:bindex], bounds=(n-0.001,n+0.001), absolute_sigma=True)
+		#n_disc_error=pcovdisc[0,0]	
+		isolated_discsim=SersicProfile(r, i_e, r_e, n)
+		res= rad- isolated_discsim
+		n_disc_error=np.sqrt(sum((res[bhindex:hindex]/stdbins[bhindex:hindex])**2))
+		poptbulge, pcovbulge = curve_fit(lambda x,ni: SersicProfile(x, i_ebulge, r_ebulge, ni), r[0:bindex], isolated_bulge[0:bindex], sigma=stdbins[0:bindex], p0=n, bounds=(n-0.001,n+0.001), absolute_sigma=True)
 		n_bulge= poptbulge[0]
-		n_bulge_error= pcovbulge[0,0]
-	
+		#n_bulge_error= pcovbulge[0,0]
+		res= rad - SersicProfile(r, i_ebulge, r_ebulge, n_bulge)
+		n_bulge_error=np.sqrt(sum((res[0:int(bindex/2)]/stdbins[0:int(bindex/2)])**2))
+		
 		poptdisca, pcovdisca=curve_fit(SersicProfilea, r[bindex:hindex], rad[bindex:hindex], p0=(i_e, r_e, n,0), bounds=((i_e-1,r_e-0.1,n-0.001,0), (i_e+1,r_e+0.1,n+0.001,20)), sigma=stdbins[bindex:hindex], absolute_sigma=True)
 		n_disca=poptdisca[2]
-		n_disc_errora=pcovdisca[2,2]
+		#n_disc_errora=pcovdisca[2,2]
+		isolated_discsima=SersicProfilea(r, poptdisca[0], poptdisca[1],n_disca,poptdisca[3])
+		res= rad - isolated_discsim
+		n_disc_errora=np.sqrt(sum((res[bhindex:hindex]/stdbins[bhindex:hindex])**2))
+
+		isolated_bulgea= rad - isolated_discsima
+		isolated_bulgea[isolated_bulgea<0]=0
+		i_ebulgea, r_ebulgea, centralbrightnessbulgea, totalbrightnessbulgea= findeffectiveradius(isolated_bulgea[0:bhindex], r[0:bhindex], nr[0:bhindex]) 
 		poptbulgea, pcovbulgea=curve_fit(SersicProfilea, r[0:bindex], isolated_bulgea[0:bindex], p0=(i_ebulgea, r_ebulgea, n,0), bounds=((i_ebulgea-1,r_ebulgea-0.1,n-0.001,0), (i_ebulgea+1,r_ebulgea+0.1,n+0.001,20)), sigma=stdbins[0:bindex], absolute_sigma=True)
 		n_bulgea= poptbulgea[2]
-		n_bulge_errora=pcovdisca[2,2]
-
-		#res= r[bindex:hindex] - isolated_discsim[bindex:hindex]
-		#chi=np.sqrt(sum((res/stdbins[bindex:hindex])**2))
+		#n_bulge_errora=pcovdisca[2,2]
+		res= rad - SersicProfilea(r, i_ebulgea, r_ebulgea, n_bulgea, poptbulgea[3])
+		n_bulge_errora=np.sqrt(sum((res[0:int(bindex/2)]/stdbins[0:int(bindex/2)])**2))
+		
 		chisdisc.append(n_disc_error)
 		chisbulge.append(n_bulge_error)
 		ndisc.append(n_disc)
@@ -242,12 +258,12 @@ def run_radial_profile(image, imagefile, sim_name):
 		chistot.append(n1_error)
 	chisdisca=np.array(chisdisca)
 	plt.plot(ntot, chistot, label='ntot')
-	plt.plot(ndisca, chisdisca+0.01, label='ndisca')
+	plt.plot(ndisca, chisdisca+0.5, label='ndisca')
 	plt.plot(nbulgea, chisbulgea,label='nbulgea')
 	plt.plot(ndisc, chisdisc, label='ndisc')
 	plt.plot(nbulge, chisbulge,label='nbulge')
-	plt.legend()
-	plt.yscale('log')
+	plt.legend(), plt.xlim(0), plt.ylim(0)
+	#plt.yscale('log')
 	plt.xlabel('n'), plt.ylabel('$\chi ^2$')#, plt.ylim(0,0.025)
 	plt.title('Plot of $\chi ^2$ generated for each n')
 	plt.tight_layout()
@@ -369,7 +385,7 @@ def run_radial_profile(image, imagefile, sim_name):
 
 if __name__ == "__main__":
 	sim_name=['RecalL0025N0752','']
-	imagefileRecalL0025N0752=['RecalL0025N0752galface_646493.png','']
+	imagefileRecalL0025N0752=['RecalL0025N0752galface_726306.png','']
 	#sim_name=['RecalL0025N0752', 'RefL0025N0376','RefL0050N0752']
 	#imagefileRecalL0025N0752=['RecalL0025N0752galface_646493.png','RecalL0025N0752galface_737885.png','RecalL0025N0752galface_746518.png','RecalL0025N0752galface_853401.png','RecalL0025N0752galface_4938.png','RecalL0025N0752galface_621500.png','RecalL0025N0752galface_726306.png','RecalL0025N0752galface_51604.png']
 	imagefileRefL0025N0376=['RefL0025N0376galface_1.png','RefL0025N0376galface_135107.png','RefL0025N0376galface_154514.png','RefL0025N0376galface_160979.png','RefL0025N0376galface_172979.png']
