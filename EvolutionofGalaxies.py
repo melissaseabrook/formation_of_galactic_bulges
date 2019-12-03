@@ -15,7 +15,7 @@ from matplotlib import cm
 from mpl_toolkits.mplot3d import axes3d
 from scipy.interpolate import griddata 
 
-sns.set_style('whitegrid')
+#sns.set_style('whitegrid')
 
 
 def sigmaclip(image, sigma, box_size):
@@ -330,43 +330,6 @@ def threeDplot(df, x,y,z, column_size, column_colour):
     Z = np.linspace(minz, maxz, hist.shape[1])
     Z,Y=np.meshgrid(Z,Y)
     ax.contourf(hist,Y,Z, zdir='x', offset=minx, cmap=cm.YlOrRd, alpha=0.6)
-    """
-    hist, binx, biny=np.histogram2d(df[x], df[y],  bins=5, weights=df['fracofbin'])
-    X = np.linspace(minx, maxx, hist.shape[0])
-    Y = np.linspace(miny, maxy, hist.shape[1])
-    X,Y=np.meshgrid(X,Y)
-    ax.contourf(X,Y,hist, zdir='z', offset=minz, cmap=cm.YlOrRd, alpha=0.6)
-    
-    hist, binx, biny=np.histogram2d(df[x], df[z], bins=5, weights=df['fracofbin'])
-    X = np.linspace(minx, maxx, hist.shape[0])
-    Z = np.linspace(minz, maxz, hist.shape[1])
-    X,Z=np.meshgrid(X,Z)
-    ax.contourf(X,hist,Z, zdir='y', offset=maxy, cmap=cm.YlOrRd, alpha=0.6)
-
-    hist, binx, biny=np.histogram2d(df[y], df[z], bins=5, weights=df['fracofbin'])
-    Y = np.linspace(miny, maxy, hist.shape[0])
-    Z = np.linspace(minz, maxz, hist.shape[1])
-    Z,Y=np.meshgrid(Z,Y)
-    ax.contourf(hist,Y,Z, zdir='x', offset=minx, cmap=cm.YlOrRd, alpha=0.6)
-    """
-    
-    C1 = griddata((df[x], df[y]), df['fracofbin'], (xi[None,:], yi[:,None]), method='linear')
-    X1, Y1 = np.meshgrid(xi, yi)
-    ax.contourf(X1, Y1, C1, zdir='z', offset=minz, cmap=cm.YlOrRd, alpha=0.4)
-    
-    C2 = griddata((df[y], df[z]), df['fracofbin'], (yi[None,:], zi[:,None]), method='linear')
-    Y2, Z2 = np.meshgrid(yi, zi)
-    ax.contourf(C2, Y2, Z2, zdir='x', offset=minx, cmap=cm.YlOrRd, alpha=0.4)
-    
-
-    C3 = griddata((df[x], df[z]), df['fracofbin'], (xi[None,:], zi[:,None]), method='linear')
-    X3, Z3 = np.meshgrid(xi, zi)
-    ax.contourf(X3, C3, Z3, zdir='y', offset=maxy, cmap=cm.YlOrRd, alpha=0.4)
-    
-    #ax.scatter(df[x], df[y],  zdir='z', zs=minz, c=sm1.to_rgba(df[column_colour]), marker='*',s=size)
-    #ax.scatter(df[y], df[z], zdir='x', zs=minx, c=sm2.to_rgba(df[column_colour]), s=size)
-    #ax.scatter(df[x], df[z], zdir='y', zs=maxy,  c=sm3.to_rgba(df[column_colour]), s=size)
-    
     
     ax.set_xlim(minx,maxx)
     ax.set_ylim(miny,maxy)
@@ -452,42 +415,68 @@ def subplothistograms(df, param1, param2, param3, param4, param5, param6):
     plt.tight_layout()
     plt.show()
 
-def evolutionplot(df, param, param_size):
-    sns.scatterplot(x='z',y=param, hue='ProjGalaxyID',data=df, size=param_size, palette=sns.color_palette('hls', df.ProjGalaxyID.nunique()), legend=False)
-    sns.lineplot(x='z',y=param, hue='ProjGalaxyID',data=df, palette=sns.color_palette('hls', df.ProjGalaxyID.nunique()))
-    plt.legend(bbox_to_anchor=(1.01,0.5), loc='center left')
-    plt.xlim(0,1.2)
+def evolutionplot(df, param, param_size, param2):
+    fig, ax=plt.subplots()
+
+    sns.scatterplot(x='z',y=param, hue='ProjGalaxyID',data=df, size=param_size, palette=sns.color_palette('hls', df.ProjGalaxyID.nunique()), legend=False, ax=ax)
+    sns.lineplot(x='z',y=param, hue='ProjGalaxyID',data=df, palette=sns.color_palette('hls', df.ProjGalaxyID.nunique()), ax=ax,legend=False, linewidth=0.8)
+    ax2=ax.twinx()
+    sns.lineplot(x='z',y=param2, hue='ProjGalaxyID',data=df, palette=sns.color_palette('hls', df.ProjGalaxyID.nunique()),  ax=ax2)
+    for i in range(df.ProjGalaxyID.nunique()):
+        ax2.lines[i].set_linestyle('--')
+    ax3=ax.twinx()
+    sns.lineplot(x='z',y='logsSFR', hue='ProjGalaxyID',data=df, palette=sns.color_palette('hls', df.ProjGalaxyID.nunique()),  ax=ax3, legend=False)
+
+
+    plt.legend(bbox_to_anchor=(1.1,0.8), loc='center left')
+    plt.xlim(0,1)
     plt.title('Evolution of '+param+' sized by'+param_size)
     plt.tight_layout()
-    plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/evolution of'+param+'.png')
+    plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/evolution of'+param+'and'+param2+'.png')
     
     plt.show()
 
+def logx(x):
+    if x !=0:
+        return np.log10(x)
+    else:
+        return 0
+
 def plotbulgetodisc(df, sim_name):
-    dftotal=df
     print(df.shape)
     drop_numerical_outliers(df, 3)
+    df=df=df.reset_index()
     print(df.shape)
+    dftotal=df
     df=df[df.n_total_error<10]
     print(df.shape)
     df=df[df.n_total>0.05]
     df=df.reset_index()
     print(df.shape)
+    
+    df['num']= df.groupby('ProjGalaxyID')['ProjGalaxyID'].transform('count')
+    #df['num']=df.ProjGalaxyID.value_counts()
+    print(df.shape)
+    df=df[df.num>7]
+    #dftotal work
+    print(df.ProjGalaxyID.nunique())
+    df['BulgeToTotal']=df.apply(lambda x: (1-x.DiscToTotal), axis=1)
+    df['logBHmass']=df.apply(lambda x: np.log10(x.BHmass), axis=1)
+    df['logmass']=df.apply(lambda x: np.log10(x.mass), axis=1)
     df['sSFR']=df.apply(lambda x: (x.SFR/x.mass), axis=1)
-    #df=removeoutlierscolumn(df, 'sSFR', 2)
-    #df=removeoutlierscolumn(df, 'mass', 2).reset_index()
+    df['logsSFR']=df.apply(lambda x: 1-logx(x.sSFR), axis=1)
+    df['dtototal']=df.apply(lambda x: (1-x.btdintensity), axis=1)
+    evolutionplot(df, 'DiscToTotal', 'logmass', 'logBHmass')
+
+
+
+    exit()
+    #df work
+
     df=df[df.sSFR>0]
     print(df.shape)
 
-    df['logsSFR']=df.apply(lambda x: np.log10(x.sSFR), axis=1)
-    df['logBHmass']=df.apply(lambda x: np.log10(x.BHmass), axis=1)
-    df['logmass']=df.apply(lambda x: np.log10(x.mass), axis=1)
-    df['sSFR']=df.apply(lambda x: (x.SFR/x.mass), axis=1)
-    df['logsSFR']=df.apply(lambda x: np.log10(x.sSFR), axis=1)
-    df['logBHmass']=df.apply(lambda x: np.log10(x.BHmass), axis=1)
-    df['logmass']=df.apply(lambda x: np.log10(x.mass), axis=1)
-    df['dtototal']=df.apply(lambda x: (1-x.btdintensity), axis=1)
-    df['BulgeToTotal']=df.apply(lambda x: (1-x.DiscToTotal), axis=1)
+
     print(df.ProjGalaxyID.nunique())
 
     evolutionplot(df, 'mass', 'mass')
@@ -510,34 +499,6 @@ def plotbulgetodisc(df, sim_name):
     df['dtbintensity']=df.apply(lambda x: invertbtd(x.btdintensity), axis=1)
     df['ZBin']=pd.qcut(df.Z, 6)
     
-    """
-    size=100*(df.mass)/(df.mass.max())
-    g=sns.PairGrid(df, vars=['DiscToTotal','dtbradius','dtbintensity','n_total','n_disca','n_disc','n_bulgea','n_bulge','SFR', 'BHmass'])
-    g.map_diag(sns.kdeplot)
-    g.hue_vals=df['mass']
-    g.hue_names=df['mass'].unique()
-    g.palette=sns.color_palette('Blues', len(g.hue_names))
-    g.map_offdiag(plt.scatter, s=size)
-    plt.tight_layout()
-    plt.subplots_adjust(top=0.9)
-    g.fig.suptitle('PairPlot for relationships between paramters, coloured by galaxy size')
-    g.savefig('evolvinggalaxygraphsbinmainbranch'+sim_name+'/allbulgeparametersrelationships.png')
-    plt.show()
-    plt.close()
-    
-    size=100*(df.mass)/(df.mass.max())
-    g=sns.PairGrid(df, x_vars=['DiscToTotal','SFR', 'BHmass'], y_vars=['n_total','n_disc','n_bulge','n_disca','n_bulgea'])
-    g.hue_vals=df['mass']
-    g.hue_names=df['mass'].unique()
-    g.palette=sns.color_palette('Blues', len(g.hue_names))
-    g.map(plt.scatter, s=size)
-    plt.tight_layout()
-    plt.subplots_adjust(top=0.9)
-    g.fig.suptitle('PairPlot for relationships between paramters, coloured by galaxy size')
-    g.savefig('evolvinggalaxygraphsbinmainbranch'+sim_name+'/selectedbulgeparametersrelationships.png')
-    plt.show()
-    plt.close()
-   """ 
    
     stackedhistogram(df, 'n_total','n_disc','n_bulge','n_bulge_exp')
     plt.close()
