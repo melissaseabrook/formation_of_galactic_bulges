@@ -14,9 +14,18 @@ from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm
 from mpl_toolkits.mplot3d import axes3d
 from scipy.interpolate import griddata 
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+from matplotlib.cbook import get_sample_data
+import scipy
+import pylab
+
 
 #sns.set_style('whitegrid')
-
+def logx(x):
+    if x !=0:
+        return np.log10(x)
+    else:
+        return 0
 
 def sigmaclip(image, sigma, box_size):
     #shows relative fluctuations in pixel intensities
@@ -416,31 +425,67 @@ def subplothistograms(df, param1, param2, param3, param4, param5, param6):
     plt.show()
 
 def evolutionplot(df, param, param_size, param2):
-    fig, ax=plt.subplots()
-
-    sns.scatterplot(x='z',y=param, hue='ProjGalaxyID',data=df, size=param_size, palette=sns.color_palette('hls', df.ProjGalaxyID.nunique()), legend=False, ax=ax)
-    sns.lineplot(x='z',y=param, hue='ProjGalaxyID',data=df, palette=sns.color_palette('hls', df.ProjGalaxyID.nunique()), ax=ax,legend=False, linewidth=0.8)
-    ax2=ax.twinx()
-    sns.lineplot(x='z',y=param2, hue='ProjGalaxyID',data=df, palette=sns.color_palette('hls', df.ProjGalaxyID.nunique()),  ax=ax2)
+    fig, (ax1,ax2)=plt.subplots(2,1, sharex=True)
+    #plt.subplot(211)
+    sns.scatterplot(x='z',y=param, hue='ProjGalaxyID',data=df, size=param_size, palette=sns.color_palette('hls', df.ProjGalaxyID.nunique()), legend=False, ax=ax1)
+    sns.lineplot(x='z',y=param, hue='ProjGalaxyID',data=df, palette=sns.color_palette('hls', df.ProjGalaxyID.nunique()), ax=ax1,legend=False, linewidth=0.8)
+    ax0=ax1.twinx()
+    sns.lineplot(x='z',y=param2, hue='ProjGalaxyID',data=df, palette=sns.color_palette('hls', df.ProjGalaxyID.nunique()),  ax=ax0)
     for i in range(df.ProjGalaxyID.nunique()):
-        ax2.lines[i].set_linestyle('--')
-    ax3=ax.twinx()
-    sns.lineplot(x='z',y='logsSFR', hue='ProjGalaxyID',data=df, palette=sns.color_palette('hls', df.ProjGalaxyID.nunique()),  ax=ax3, legend=False)
-
+        ax0.lines[i].set_linestyle('--')
+    #plt.subplot(212)
+    sns.lineplot(x='z',y='logsSFR', hue='ProjGalaxyID',data=df, palette=sns.color_palette('hls', df.ProjGalaxyID.nunique()), ax=ax2, legend=False)
+    ax3=ax2.twinx()
+    sns.lineplot(x='z',y='n_total', hue='ProjGalaxyID',data=df, palette=sns.color_palette('hls', df.ProjGalaxyID.nunique()),  ax=ax3, legend=True)
+    for i in range(df.ProjGalaxyID.nunique()):
+        ax3.lines[i].set_linestyle('--')
 
     plt.legend(bbox_to_anchor=(1.1,0.8), loc='center left')
     plt.xlim(0,1)
     plt.title('Evolution of '+param+' sized by'+param_size)
-    plt.tight_layout()
+    #plt.tight_layout()
     plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/evolution of'+param+'and'+param2+'.png')
     
     plt.show()
 
-def logx(x):
-    if x !=0:
-        return np.log10(x)
-    else:
-        return 0
+def specificgalaxyplot(df, galaxyid, param1, param2, param3, param4):
+    df2=df[df.ProjGalaxyID==galaxyid]
+
+    x = df2['z'].tolist()
+    y_image=np.zeros(df2.z.nunique())
+    y1= df2[param1].tolist()
+    y2 = df2[param2].tolist()
+    y3 = df2[param3].tolist()
+    y4 = df2[param4].tolist()
+    paths = df2['filename'].tolist()
+
+    fig, (ax1,ax0) = plt.subplots(2,1, gridspec_kw={'height_ratios': [4, 1]}, sharex=True)
+    ax3=ax1.twinx()
+    ax4=ax1.twinx()
+    ax2=ax3.twinx()
+    ax1.plot(x, y1,  'r', label=param1)
+    ax2.plot(x, y2,  'b--', label=param2)
+    ax3.plot(x, y3,  'g--', label=param3)
+    ax4.plot(x, y4,  'y', label=param4)
+    ax1.set_ylabel(param1),ax2.set_ylabel(param2),ax3.set_ylabel(param3),ax4.set_ylabel(param4) 
+    lines_labels = [ax.get_legend_handles_labels() for ax in fig.axes]
+    lines, labels = [sum(lol, []) for lol in zip(*lines_labels)]
+    fig.legend(lines, labels, loc='upper center')
+    for x0, y0, path in zip(x, y_image,paths):
+        ab = AnnotationBbox(getImage(path), (x0, y0), frameon=False)
+        ax0.add_artist(ab)
+    ax0.yaxis.set_visible(False)   
+    ax0.set_ylim(-0.01,0.01) 
+    ax0.set_xlabel('z')
+    #ax.plot(x, y, ax)
+    plt.subplots_adjust(hspace=0)
+    plt.title('Pictorial Evolution of Galaxy'+str(galaxyid))
+    plt.draw()
+    plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/PictorialEvolutionGalaxy'+str(galaxyid)+'.png')
+    plt.show()
+
+def getImage(path):
+    return OffsetImage(plt.imread('evolvinggalaxyimagebinmainbranchRecalL0025N0752/'+path), zoom=0.15)
 
 def plotbulgetodisc(df, sim_name):
     print(df.shape)
@@ -457,16 +502,18 @@ def plotbulgetodisc(df, sim_name):
     df['num']= df.groupby('ProjGalaxyID')['ProjGalaxyID'].transform('count')
     #df['num']=df.ProjGalaxyID.value_counts()
     print(df.shape)
-    df=df[df.num>7]
+    #df=df[df.num>7]
     #dftotal work
     print(df.ProjGalaxyID.nunique())
     df['BulgeToTotal']=df.apply(lambda x: (1-x.DiscToTotal), axis=1)
     df['logBHmass']=df.apply(lambda x: np.log10(x.BHmass), axis=1)
     df['logmass']=df.apply(lambda x: np.log10(x.mass), axis=1)
     df['sSFR']=df.apply(lambda x: (x.SFR/x.mass), axis=1)
-    df['logsSFR']=df.apply(lambda x: 1-logx(x.sSFR), axis=1)
+    df['logsSFR']=df.apply(lambda x: logx(x.sSFR), axis=1)
     df['dtototal']=df.apply(lambda x: (1-x.btdintensity), axis=1)
-    evolutionplot(df, 'DiscToTotal', 'logmass', 'logBHmass')
+    specificgalaxyplot(df, 793490, 'BulgeToTotal', 'n_total', 'logsSFR', 'logBHmass')
+
+    #evolutionplot(df, 'BulgeToTotal', 'logmass', 'logBHmass')
 
 
 
