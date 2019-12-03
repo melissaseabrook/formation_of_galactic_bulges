@@ -313,7 +313,7 @@ def invert(var):
 
 
 def threeDplot(df, x,y,z, column_size, column_colour):
-    df['BHmassbin']=pd.cut(df.logBHmass, 10)
+    df['BHmassbin']=pd.cut(df.logBHmass, 30)
     df['BHmasscounts']=df.groupby('BHmassbin')['BHmassbin'].transform('count')
     df['fracofbin']=df.apply(lambda x: (10.0/x.BHmasscounts), axis=1)
     print(df[['logBHmass','BHmassbin', 'BHmasscounts', 'fracofbin']])
@@ -335,35 +335,35 @@ def threeDplot(df, x,y,z, column_size, column_colour):
     yi = np.linspace(miny, maxy, 100)
     zi = np.linspace(minz, maxz, 100)
     
-    hist, binx, biny=np.histogram2d(df[y], df[x],  bins=5, weights=df['fracofbin'])
+    hist, binx, biny=np.histogram2d(df[y], df[x],  bins=7)
     X = np.linspace(minx, maxx, hist.shape[0])
     Y = np.linspace(miny, maxy, hist.shape[1])
     X,Y=np.meshgrid(X,Y)
     ax.contourf(X,Y,hist, zdir='z', offset=minz, cmap=cm.YlOrRd, alpha=0.6)
     
-    hist, binx, biny=np.histogram2d(df[z], df[x], bins=5, weights=df['fracofbin'])
+    hist, binx, biny=np.histogram2d(df[z], df[x], bins=7)
     X = np.linspace(minx, maxx, hist.shape[0])
     Z = np.linspace(minz, maxz, hist.shape[1])
     X,Z=np.meshgrid(X,Z)
     ax.contourf(X,hist,Z, zdir='y', offset=maxy, cmap=cm.YlOrRd, alpha=0.6)
 
-    hist, binx, biny=np.histogram2d(df[y], df[z], bins=5, weights=df['fracofbin'])
+    hist, binx, biny=np.histogram2d(df[y], df[z], bins=7)
     Y = np.linspace(miny, maxy, hist.shape[0])
     Z = np.linspace(minz, maxz, hist.shape[1])
     Z,Y=np.meshgrid(Z,Y)
     ax.contourf(hist,Y,Z, zdir='x', offset=minx, cmap=cm.YlOrRd, alpha=0.6)
     """
     
-    C1 = griddata((df[x], df[y]), df['fracofbin'], (xi[None,:], yi[:,None]), method='linear')
+    C1 = griddata((df[x], df[y]), df['BHmasscounts'], (xi[None,:], yi[:,None]), method='linear')
     X1, Y1 = np.meshgrid(xi, yi)
     ax.contourf(X1, Y1, C1, zdir='z', offset=minz, cmap=cm.YlOrRd, alpha=0.4)
     
-    C2 = griddata((df[y], df[z]), df['fracofbin'], (yi[None,:], zi[:,None]), method='linear')
+    C2 = griddata((df[y], df[z]), df['BHmasscounts'], (yi[None,:], zi[:,None]), method='linear')
     Y2, Z2 = np.meshgrid(yi, zi)
     ax.contourf(C2, Y2, Z2, zdir='x', offset=minx, cmap=cm.YlOrRd, alpha=0.4)
     
 
-    C3 = griddata((df[x], df[z]), df['fracofbin'], (xi[None,:], zi[:,None]), method='linear')
+    C3 = griddata((df[x], df[z]), df['BHmasscounts'], (xi[None,:], zi[:,None]), method='linear')
     X3, Z3 = np.meshgrid(xi, zi)
     ax.contourf(X3, C3, Z3, zdir='y', offset=maxy, cmap=cm.YlOrRd, alpha=0.4)
     """
@@ -546,7 +546,7 @@ def plotbulgetodisc(df, sim_name):
     plt.close()
 
 if __name__ == "__main__":
-    sim_name='RecalL0025N0752'
+    sim_name='RefL0050N0752'
     read_data=True
     if(read_data):
         print('.........reading.......')
