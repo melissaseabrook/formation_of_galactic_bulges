@@ -515,9 +515,9 @@ def getImage(path):
 
 def plotbulgetodisc(df, sim_name):
     print(df.shape)
-    drop_numerical_outliers(df, 3)
-    df=df=df.reset_index()
-    print(df.shape)
+    #drop_numerical_outliers(df, 3)
+    #df=df=df.reset_index()
+    #print(df.shape)
     dftotal=df
     df=df[df.n_total_error<10]
     print(df.shape)
@@ -533,8 +533,8 @@ def plotbulgetodisc(df, sim_name):
     print(df.ProjGalaxyID.nunique())
     df['BulgeToTotal']=df.apply(lambda x: (1-x.DiscToTotal), axis=1)
     df['logBHmass']=df.apply(lambda x: np.log10(x.BHmass), axis=1)
-    df['logmass']=df.apply(lambda x: np.log10(x.mass), axis=1)
-    df['sSFR']=df.apply(lambda x: (x.SFR/x.mass), axis=1)
+    df['logmass']=df.apply(lambda x: np.log10(x.Starmass), axis=1)
+    df['sSFR']=df.apply(lambda x: (x.SFR/x.Starmass), axis=1)
     df['logsSFR']=df.apply(lambda x: logx(x.sSFR), axis=1)
     df['dtototal']=df.apply(lambda x: (1-x.btdintensity), axis=1)
     specificgalaxyplot(df, 846421, 'BulgeToTotal', 'n_total', 'logsSFR', 'logBHmass')
@@ -552,8 +552,8 @@ def plotbulgetodisc(df, sim_name):
 
     print(df.ProjGalaxyID.nunique())
 
-    evolutionplot(df, 'mass', 'mass')
-    threeDplot(df, 'z','DiscToTotal','logBHmass', 'mass', 'logsSFR')
+    evolutionplot(df, 'Starmass', 'Starmass')
+    threeDplot(df, 'z','DiscToTotal','logBHmass', 'Starmass', 'logsSFR')
     exit()
 
     
@@ -563,7 +563,7 @@ def plotbulgetodisc(df, sim_name):
 
     
     #colorbarplot(df, 'n_total', 'DiscToTotal', 'logmass', 'logsSFR', 'BHmass')
-    threeDplot(df, 'dtototal','DiscToTotal','logBHmass', 'mass', 'logsSFR')
+    threeDplot(df, 'dtototal','DiscToTotal','logBHmass', 'Starmass', 'logsSFR')
 
 
     exit()
@@ -595,13 +595,15 @@ def plotbulgetodisc(df, sim_name):
 
 if __name__ == "__main__":
     sim_name='RecalL0025N0752'
+    #query_type=mainbranch or allbranches
+    query_type='allbranches'
     read_data=True
     if(read_data):
         print('.........reading.......')
-        df=pd.read_csv('evolvingEAGLEbulgediscmainbranchdf'+sim_name+'.csv')
+        df=pd.read_csv('evolvingEAGLEbulgedisc'+query_type+'df'+sim_name+'.csv')
     else:
         print('.........writing.......')
-        df=pd.read_csv('evolvingEAGLEimagesmainbranchdf'+sim_name+'.csv')
+        df=pd.read_csv('evolvingEAGLEimages'+query_type+'df'+sim_name+'.csv')
         discbulgetemp=[]
         for filename in df['filename']:
             if filename == sim_name:
@@ -610,7 +612,7 @@ if __name__ == "__main__":
                 discbulgetemp.append([filename, btdradius, btdintensity,n_total, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disc_error, n_bulge_error, n_bulge_exp_error, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius])
             
             else:
-                BGRimage=cv2.imread('evolvinggalaxyimagebinmainbranch'+sim_name+'/'+filename)
+                BGRimage=cv2.imread('evolvinggalaxyimagebin'+query_type+''+sim_name+'/'+filename)
                 btdradius, btdintensity, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius =findandlabelbulge(BGRimage, filename, sim_name)
                 n_total, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disc_error, n_bulge_error, n_bulge_exp_error=findsersicindex(BGRimage, bradius, hradius)
                 discbulgetemp.append([filename, btdradius, btdintensity,n_total, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disc_error, n_bulge_error, n_bulge_exp_error, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius])
@@ -622,7 +624,7 @@ if __name__ == "__main__":
         print(df)
         df=pd.merge(df, discbulgedf, on=['filename'], how='left').drop_duplicates()
         print(df)
-        df.to_csv('evolvingEAGLEbulgediscmainbranchdf'+sim_name+'.csv')
+        df.to_csv('evolvingEAGLEbulgedisc'+query_type+'df'+sim_name+'.csv')
 
     plotbulgetodisc(df, sim_name)
 

@@ -117,7 +117,7 @@ def getdata(mySims, querytype):
                     SH.Redshift"%( sim_name , sim_name, sim_name, sim_name)
 
         myData = sql.execute_query (con , Query)
-        df=pd.DataFrame(myData, columns=['ProjGalaxyID','DescGalaxyID','z','Z','face','mass', 'DiscToTotal', 'HalfMassRadius','VelDisp','BHmass','SFR'])
+        df=pd.DataFrame(myData, columns=['ProjGalaxyID','DescGalaxyID','z','Z','face','HalfMassRadius', 'VelDisp','Starmass', 'BHmass','DMmass','Gasmass','SFR','StellarInitialMass','BHAccretionrate','Vmax','Vmaxradius','DiscToTotal', 'DispAnisotropy','DMEllipticity','StellarEllipticity','StellarCoRotKE','MedOrbitCircu','RotToDispRatio','Triaxiality'])
         df['face']=  df['face'].str.decode("utf-8")
         df['face']=df['face'].str.replace('"<img src=', '').str.replace('>"', '').str.replace("'",'')
         df=df.assign(name1 = lambda x: x.face)
@@ -133,7 +133,7 @@ def getdata(mySims, querytype):
 if __name__ == "__main__":
     mySims = np.array (['RecalL0025N0752'])
     #querytype = allbranches or mainbranch
-    querytype= 'allbranches'
+    querytype= 'mainbranch'
     getdata(mySims, querytype)
     
 
