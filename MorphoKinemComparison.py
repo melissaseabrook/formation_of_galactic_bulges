@@ -472,17 +472,17 @@ def plotbulgetodisc(df, sim_name):
     df=df[df.n_total>0.05]
     df['sSFR']=df.apply(lambda x: (x.SFR/x.mass), axis=1)
     df=removeoutlierscolumn(df, 'sSFR', 2)
-    df=removeoutlierscolumn(df, 'mass', 2)
+    df=removeoutlierscolumn(df, 'Starmass', 2)
     df=df[df.sSFR>0]
     print(df.shape)
 
     df['logsSFR']=df.apply(lambda x: np.log10(x.sSFR), axis=1)
     df['logBHmass']=df.apply(lambda x: np.log10(x.BHmass), axis=1)
-    df['logmass']=df.apply(lambda x: np.log10(x.mass), axis=1)
-    df['sSFR']=df.apply(lambda x: (x.SFR/x.mass), axis=1)
+    df['logmass']=df.apply(lambda x: np.log10(x.Starmass), axis=1)
+    df['sSFR']=df.apply(lambda x: (x.SFR/x.Starmass), axis=1)
     df['logsSFR']=df.apply(lambda x: np.log10(x.sSFR), axis=1)
     df['logBHmass']=df.apply(lambda x: np.log10(x.BHmass), axis=1)
-    df['logmass']=df.apply(lambda x: np.log10(x.mass), axis=1)
+    df['logmass']=df.apply(lambda x: np.log10(x.Starmass), axis=1)
 
     #stackedhistogram(df, 'n_total','n_disc','n_bulge','n_bulge_exp')
     #subplothistograms(df, 'n_total','n_disc','n_bulge','n_disca','n_bulgea','n_bulge_exp')

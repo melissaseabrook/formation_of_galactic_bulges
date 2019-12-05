@@ -36,10 +36,23 @@ def getdata(mySims, querytype):
                     SH.Image_Face as face, \
                     SH.HalfMassRad_Star as HalfMassRadius, \
                     AP.VelDisp as VelDisp, \
-                    AP.Mass_Star as mass, \
+                    AP.Mass_Star as Starmass, \
                     AP.Mass_BH as BHmass, \
+                    AP.Mass_DM as DMmass, \
+                    AP.Mass_Gas as Gasmass, \
                     AP.SFR as SFR, \
-                    MK.DiscToTotal as DiscToTotal\
+                    SH.StellarInitialMass as StellarInitialMass, \
+                    SH.BlackHoleMassAccretionRate as BHAccretionrate, \
+                    SH.Vmax as Vmax, \
+                    SH.VmaxRadius as Vmaxradius, \
+                    MK.DiscToTotal as DiscToTotal,\
+                    MK.DispAnisotropy as DispAnisotropy, \
+                    MK.DMEllipticity as DMEllipticity, \
+                    MK.Ellipticity as StellarEllipticity, \
+                    MK.KappaCoRot as StellarCoRotKE, \
+                    MK.MedOrbitCircu as MedOrbitCircu, \
+                    MK.RotToDispRatio as RotToDispRatio, \
+                    MK.Triaxiality as Triaxiality \
                 FROM \
                     %s_Subhalo as SH, \
                     %s_Subhalo as ref, \
@@ -67,10 +80,23 @@ def getdata(mySims, querytype):
                     SH.Image_Face as face, \
                     SH.HalfMassRad_Star as HalfMassRadius, \
                     AP.VelDisp as VelDisp, \
-                    AP.Mass_Star as mass, \
+                    AP.Mass_Star as Starmass, \
                     AP.Mass_BH as BHmass, \
+                    AP.Mass_DM as DMmass, \
+                    AP.Mass_Gas as Gasmass, \
                     AP.SFR as SFR, \
-                    MK.DiscToTotal as DiscToTotal\
+                    SH.StellarInitialMass as StellarInitialMass, \
+                    SH.BlackHoleMassAccretionRate as BHAccretionrate, \
+                    SH.Vmax as Vmax, \
+                    SH.VmaxRadius as Vmaxradius, \
+                    MK.DiscToTotal as DiscToTotal,\
+                    MK.DispAnisotropy as DispAnisotropy, \
+                    MK.DMEllipticity as DMEllipticity, \
+                    MK.Ellipticity as StellarEllipticity, \
+                    MK.KappaCoRot as StellarCoRotKE, \
+                    MK.MedOrbitCircu as MedOrbitCircu, \
+                    MK.RotToDispRatio as RotToDispRatio, \
+                    MK.Triaxiality as Triaxiality \
                 FROM \
                     %s_Subhalo as SH, \
                     %s_Subhalo as ref, \
@@ -107,7 +133,7 @@ def getdata(mySims, querytype):
 if __name__ == "__main__":
     mySims = np.array (['RecalL0025N0752'])
     #querytype = allbranches or mainbranch
-    querytype= 'mainbranch'
+    querytype= 'allbranches'
     getdata(mySims, querytype)
     
 
