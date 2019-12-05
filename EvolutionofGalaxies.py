@@ -15,8 +15,7 @@ from matplotlib import cm
 from mpl_toolkits.mplot3d import axes3d
 from scipy.interpolate import griddata 
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
-from matplotlib.cbook import get_sample_data
-import scipy
+from astropy.cosmology import Planck13
 import pylab
 
 
@@ -24,6 +23,18 @@ import pylab
 def logx(x):
     if x !=0:
         return np.log10(x)
+    else:
+        return 0
+
+def divide(x,y):
+    if y !=0:
+        return x/y
+    else:
+        return 0
+
+def invert(var):
+    if var != 0:
+        return(1/var)*10
     else:
         return 0
 
@@ -293,11 +304,59 @@ def removeoutlierscolumn(df, column_name, sigma):
     df=df[np.abs(df[column_name]-df[column_name].mean())<=(sigma*df[column_name].std())]
     return df
 
-def invert(var):
-    if var != 0:
-        return(1/var)*10
-    else:
-        return 0
+def getImage(path):
+    return OffsetImage(plt.imread('evolvinggalaxyimagebinmainbranchRecalL0025N0752/'+path), zoom=0.15)
+
+def cleanandtransformdata(df):
+    print(df.shape)
+    df.sort_values(['z','ProjGalaxyID'], ascending=[False,True], inplace=True)
+    df['lbt']=df.apply(lambda x: round(Planck13.lookback_time(x.z).value, 1), axis=1)
+    df['lookbacktime']=df.apply(lambda x: -(Planck13.lookback_time(x.z).value)*(1e9), axis=1)
+    df['dlbt']=df.groupby('ProjGalaxyID')['lookbacktime'].diff()
+    df['dSFR']=df.groupby('ProjGalaxyID')['SFR'].diff()
+    df['dBHmass']=df.groupby('ProjGalaxyID')['BHmass'].diff()
+    df['dSIM']=df.groupby('ProjGalaxyID')['StellarInitialMass'].diff()
+    df['dD2T']=df.groupby('ProjGalaxyID')['DiscToTotal'].diff()
+    df['dn_total']=df.groupby('ProjGalaxyID')['n_total'].diff()
+    df['dz']=df.groupby('ProjGalaxyID')['z'].diff()
+    df['dz']=df.apply(lambda x: -x.dz, axis=1)
+    df['dSFRdz']=df.apply(lambda x: (x.dSFR)/(x.dz), axis=1)
+    df['dBHmassdz']=df.apply(lambda x: (x.dBHmass)/(x.dz), axis=1)
+    df['dSIMdz']=df.apply(lambda x: (x.dSIM)/(x.dz), axis=1)
+    df['dn_totaldz']=df.apply(lambda x: (x.dn_total)/(x.dz), axis=1)
+    df['dD2Tdz']=df.apply(lambda x: (x.dD2T)/(x.dz), axis=1)
+    df['dSFRdt']=df.apply(lambda x: (x.dSFR)/(x.dlbt), axis=1)
+    df['dBHmassdt']=df.apply(lambda x: (x.dBHmass)/(x.dlbt), axis=1)
+    df['dSIMdt']=df.apply(lambda x: (x.dSIM)/(x.dlbt), axis=1)
+    df['dn_totaldt']=df.apply(lambda x: (x.dn_total)/(x.dlbt), axis=1)
+    df['dD2Tdt']=df.apply(lambda x: (x.dD2T)/(x.dlbt), axis=1)
+
+    #drop_numerical_outliers(df, 3)
+    #df=df=df.reset_index()
+    #print(df.shape)
+    
+    df['num']= df.groupby('ProjGalaxyID')['ProjGalaxyID'].transform('count')
+    print(df.shape)
+    #df=df[df.num>7]
+    #dftotal work
+    print(df.ProjGalaxyID.nunique())
+    df['BulgeToTotal']=df.apply(lambda x: (1-x.DiscToTotal), axis=1)
+    df['logBHmass']=df.apply(lambda x: logx(x.BHmass), axis=1)
+    df['logmass']=df.apply(lambda x: logx(x.Starmass), axis=1)
+    df['sSFR']=df.apply(lambda x: divide(x.SFR,x.Starmass), axis=1)
+    df['logsSFR']=df.apply(lambda x: logx(x.sSFR), axis=1)
+    df['dtototal']=df.apply(lambda x: (1-x.btdintensity), axis=1)
+    df['dtbradius']=df.apply(lambda x: invertbtd(x.btdradius), axis=1)
+    df['dtbintensity']=df.apply(lambda x: invertbtd(x.btdintensity), axis=1)
+    """
+    dftotal=df
+    df=df[df.n_total_error<100]
+    df['num_images']= df.groupby('ProjGalaxyID')['ProjGalaxyID'].transform('count')
+    print(df.shape)
+    df=df[df.n_total>0.05]
+    df=df.reset_index()
+    print(df.shape)
+    """
 
 def threeDplot(df, x,y,z, column_size, column_colour):
     df['BHmassbin']=pd.cut(df.logBHmass, 10)
@@ -450,6 +509,7 @@ def evolutionplot(df, param, param_size, param2):
 
 def specificgalaxyplot(df, galaxyid, param1, param2, param3, param4):
     df2=df[df.ProjGalaxyID==galaxyid]
+    df2=df2[df2.n_total>0]
 
     x = df2['z'].tolist()
     y_image=np.zeros(df2.z.nunique())
@@ -470,8 +530,6 @@ def specificgalaxyplot(df, galaxyid, param1, param2, param3, param4):
     ax4.spines['right'].set_position(('axes', -0.65))
     axes[-1].set_frame_on(True)
     axes[-1].patch.set_visible(False)
-
-
 
     ax1.plot(x, y1,  'r', label=param1)
     ax1.yaxis.label.set_color('red')
@@ -510,47 +568,70 @@ def specificgalaxyplot(df, galaxyid, param1, param2, param3, param4):
     plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/PictorialEvolutionGalaxy'+str(galaxyid)+'.png')
     plt.show()
 
-def getImage(path):
-    return OffsetImage(plt.imread('evolvinggalaxyimagebinmainbranchRecalL0025N0752/'+path), zoom=0.15)
+def specificgalplotratesofvariabless(df, galaxyid):
+    df=df[df.ProjGalaxyID==galaxyid]
+    fig, (ax1,ax2,ax3) = plt.subplots(3,1, sharex=True, figsize=(8,6))
+    ax0=ax1.twiny()
+    ax0.set_xlabel('Lookback time (Gyr)')
+    ax0.set_xticks(df.lbt)
+    ax0.set_xlim(df.lbt.max(), df.lbt.min())
+    ax1.plot(df.z,df.SFR, 'r' ,label='SFR')
+    ax1.plot(df.z, df.dSIMdt,'purple', label='dSIMdt' )
+    ax1b=ax1.twinx()
+    ax1b.plot(df.z, df.dSFRdz, 'r--',label='dSFRdz')
+    ax1b.set_ylabel('$\dfrac{dSFR}{dt}$')
+    ax1.set_ylabel('$M_{\odot}yr^{-1}$')
+    ax2.plot(df.z,df.BHAccretionrate,'brown', label='BHAccretionRate')
+    ax2b=ax2.twinx()
+    ax2b.plot(df.z,df.dBHmassdt, 'y', label='dBHmassdt')
+    ax2b.set_ylabel('$\dfrac{dBHmass}{dt}$')
+    ax2.set_ylabel('$M_{\odot}yr^{-1}$')
+    ax3.plot(df.z,df.DiscToTotal, 'b', label='DiscToTotal')
+    ax3.plot(df.z, df.dD2Tdz, 'b--',label='dD2Tdz')
+    ax3.plot(df.z,df.n_total, 'g', label='n_total' )
+    ax3b=ax3.twinx()
+    ax3b.plot(df.z,df.dn_totaldz,'g--', label='dn_totaldz')
+    ax3b.set_ylabel('$\dfrac{dn_total}{dt}$')
+    ax3.set_xlabel('z')
+    fig.legend(bbox_to_anchor=(1.01,0.5),loc='center right')
+    ax0.set_title('Rate of Change of Variables for galaxy '+str(galaxyid))
+    #plt.tight_layout()
+    plt.subplots_adjust(hspace=0, right=0.6)
+    plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/RatesofVariables'+str(galaxyid)+'.png')
+    plt.show()
+
+def specificgalplotmasses(df, galaxyid):
+    df=df[df.ProjGalaxyID==galaxyid]
+    plt.plot(df.z,df.Starmass, label='Starmass')
+    plt.plot(df.z, df.BHmass, label='BHmass')
+    plt.plot(df.z, df.Gasmass, label='Gasmass')
+    plt.plot(df.z, df.StellarInitialMass, label='StellarInitialMass')
+    plt.xlabel('z')
+    plt.yscale('log')
+    plt.ylabel('$M_{\odot}$')
+    plt.legend()
+    plt.title('Mass Comparisons for galaxy '+str(galaxyid))
+    plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/Massesof'+str(galaxyid)+'.png')
+    plt.show()
 
 def plotbulgetodisc(df, sim_name):
-    print(df.shape)
-    #drop_numerical_outliers(df, 3)
-    #df=df=df.reset_index()
-    #print(df.shape)
-    dftotal=df
-    df=df[df.n_total_error<10]
-    print(df.shape)
-    df=df[df.n_total>0.05]
-    df=df.reset_index()
-    print(df.shape)
-    
-    df['num']= df.groupby('ProjGalaxyID')['ProjGalaxyID'].transform('count')
-    #df['num']=df.ProjGalaxyID.value_counts()
-    print(df.shape)
-    #df=df[df.num>7]
-    #dftotal work
-    print(df.ProjGalaxyID.nunique())
-    df['BulgeToTotal']=df.apply(lambda x: (1-x.DiscToTotal), axis=1)
-    df['logBHmass']=df.apply(lambda x: np.log10(x.BHmass), axis=1)
-    df['logmass']=df.apply(lambda x: np.log10(x.Starmass), axis=1)
-    df['sSFR']=df.apply(lambda x: (x.SFR/x.Starmass), axis=1)
-    df['logsSFR']=df.apply(lambda x: logx(x.sSFR), axis=1)
-    df['dtototal']=df.apply(lambda x: (1-x.btdintensity), axis=1)
-    specificgalaxyplot(df, 846421, 'BulgeToTotal', 'n_total', 'logsSFR', 'logBHmass')
-
-    #evolutionplot(df, 'BulgeToTotal', 'logmass', 'logBHmass')
-
-
-
+    cleanandtransformdata(df)
+    #print(df[['z','dz','lookbacktime','dlbt','StellarInitialMass', 'dSIM', 'dSIMdz', 'dSIMdt', 'SFR']])
+    galaxyid=646493
+    df=df[df.ProjGalaxyID==galaxyid]
+    plt.plot(df.z, df.BulgeToTotal)
+    plt.plot(df.z, df.SFR)
+    plt.show()
     exit()
+    #specificgalplotmasses(df, galaxyid)
+    specificgalplotratesofvariabless(df, galaxyid)
+    #specificgalaxyplot(df, galaxyid, 'BulgeToTotal', 'n_total', 'logsSFR', 'logBHmass')
+    exit()
+    evolutionplot(df, 'BulgeToTotal', 'logmass', 'logBHmass')
     #df work
-
+    
     df=df[df.sSFR>0]
     print(df.shape)
-
-
-    print(df.ProjGalaxyID.nunique())
 
     evolutionplot(df, 'Starmass', 'Starmass')
     threeDplot(df, 'z','DiscToTotal','logBHmass', 'Starmass', 'logsSFR')
@@ -560,17 +641,13 @@ def plotbulgetodisc(df, sim_name):
 
     stackedhistogram(df, 'n_total','n_disc','n_bulge','n_bulge_exp')
     #subplothistograms(df, 'n_total','n_disc','n_bulge','n_disca','n_bulgea','n_bulge_exp')
-
-    
     #colorbarplot(df, 'n_total', 'DiscToTotal', 'logmass', 'logsSFR', 'BHmass')
     threeDplot(df, 'dtototal','DiscToTotal','logBHmass', 'Starmass', 'logsSFR')
 
 
     exit()
     
-    df['dtbradius']=df.apply(lambda x: invertbtd(x.btdradius), axis=1)
-    df['dtbintensity']=df.apply(lambda x: invertbtd(x.btdintensity), axis=1)
-    df['ZBin']=pd.qcut(df.Z, 6)
+    
     
    
     stackedhistogram(df, 'n_total','n_disc','n_bulge','n_bulge_exp')
