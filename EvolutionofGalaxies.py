@@ -459,28 +459,54 @@ def specificgalaxyplot(df, galaxyid, param1, param2, param3, param4):
     y4 = df2[param4].tolist()
     paths = df2['filename'].tolist()
 
-    fig, (ax1,ax0) = plt.subplots(2,1, gridspec_kw={'height_ratios': [4, 1]}, sharex=True)
+    fig, (ax1,ax0) = plt.subplots(2,1, gridspec_kw={'height_ratios': [7.8, 1]}, sharex=True, figsize=(9,6))
+    ax2=ax1.twinx()
     ax3=ax1.twinx()
     ax4=ax1.twinx()
-    ax2=ax3.twinx()
+    
+    axes=[ax1,ax2,ax3,ax4]
+    ax2.spines['right'].set_position(('axes', -0.25))
+    ax3.spines['right'].set_position(('axes', -0.45))
+    ax4.spines['right'].set_position(('axes', -0.65))
+    axes[-1].set_frame_on(True)
+    axes[-1].patch.set_visible(False)
+
+
+
     ax1.plot(x, y1,  'r', label=param1)
+    ax1.yaxis.label.set_color('red')
+    ax1.tick_params(axis='y', colors='red')
+    ax1.set_ylabel(param1)
+
     ax2.plot(x, y2,  'b--', label=param2)
+    ax2.yaxis.label.set_color('b')
+    ax2.tick_params(axis='y', colors='b')
+    ax2.set_ylabel(param2, labelpad=-40)
+
     ax3.plot(x, y3,  'g--', label=param3)
+    ax3.yaxis.label.set_color('g')
+    ax3.tick_params(axis='y', colors='g')
+    ax3.set_ylabel(param3, labelpad=-45)
+
     ax4.plot(x, y4,  'y', label=param4)
-    ax1.set_ylabel(param1),ax2.set_ylabel(param2),ax3.set_ylabel(param3),ax4.set_ylabel(param4) 
+    ax4.yaxis.label.set_color('y')
+    ax4.tick_params(axis='y', colors='y')
+    ax4.set_ylabel(param4, labelpad=-50) 
+
     lines_labels = [ax.get_legend_handles_labels() for ax in fig.axes]
     lines, labels = [sum(lol, []) for lol in zip(*lines_labels)]
-    fig.legend(lines, labels, loc='upper center')
+    
     for x0, y0, path in zip(x, y_image,paths):
         ab = AnnotationBbox(getImage(path), (x0, y0), frameon=False)
         ax0.add_artist(ab)
-    ax0.yaxis.set_visible(False)   
+    ax0.yaxis.set_visible(False) 
     ax0.set_ylim(-0.01,0.01) 
     ax0.set_xlabel('z')
     #ax.plot(x, y, ax)
-    plt.subplots_adjust(hspace=0)
+    plt.subplots_adjust(left=0.4,hspace=0)
     plt.title('Pictorial Evolution of Galaxy'+str(galaxyid))
     plt.draw()
+    ax1.legend(lines, labels, bbox_to_anchor=(0.5, 1.2), loc='upper center', ncol=4)
     plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/PictorialEvolutionGalaxy'+str(galaxyid)+'.png')
     plt.show()
 
@@ -511,7 +537,7 @@ def plotbulgetodisc(df, sim_name):
     df['sSFR']=df.apply(lambda x: (x.SFR/x.mass), axis=1)
     df['logsSFR']=df.apply(lambda x: logx(x.sSFR), axis=1)
     df['dtototal']=df.apply(lambda x: (1-x.btdintensity), axis=1)
-    specificgalaxyplot(df, 793490, 'BulgeToTotal', 'n_total', 'logsSFR', 'logBHmass')
+    specificgalaxyplot(df, 846421, 'BulgeToTotal', 'n_total', 'logsSFR', 'logBHmass')
 
     #evolutionplot(df, 'BulgeToTotal', 'logmass', 'logBHmass')
 
