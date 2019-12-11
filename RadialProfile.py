@@ -134,12 +134,12 @@ def findbulge(sim_name, image, imagefile, sigma_bulge, sigma_disc):
 	blurred1 = cv2.GaussianBlur(gray, ksize=(7,7), sigmaX=3,sigmaY=3)
 	thresh1 = cv2.threshold(blurred1, median + sigma_bulge*std, 255, cv2.THRESH_BINARY)[1]
 	thresh1 = cv2.erode(thresh1, None, iterations=2)
-	cv2.imwrite('galaxygraphsbin'+sim_name+'/TESTradialprofile/opencvbulgediscimages/bulgethreshsigma'+str(sigma_disc)+''+str(sigma_bulge)+''+imagefile, thresh1)
+	#cv2.imwrite('galaxygraphsbin'+sim_name+'/TESTradialprofile/opencvbulgediscimages/bulgethreshsigma'+str(sigma_disc)+''+str(sigma_bulge)+''+imagefile, thresh1)
 	#thresh1 = cv2.dilate(thresh1, None, iterations=4)
 	blurred2 = cv2.GaussianBlur(gray, ksize=(15, 15), sigmaX=3,sigmaY=3)
-	thresh2 = cv2.threshold(blurred2, median + std, 255, cv2.THRESH_BINARY)[1]
+	thresh2 = cv2.threshold(blurred2, median+sigma_disc*std, 255, cv2.THRESH_BINARY)[1]
 	thresh2 = cv2.dilate(thresh2, None, iterations=4)
-	cv2.imwrite('galaxygraphsbin'+sim_name+'/TESTradialprofile/opencvbulgediscimages/discthreshsigma'+str(sigma_disc)+''+str(sigma_bulge)+''+imagefile, thresh1)
+	#cv2.imwrite('galaxygraphsbin'+sim_name+'/TESTradialprofile/opencvbulgediscimages/discthreshsigma'+str(sigma_disc)+''+str(sigma_bulge)+''+imagefile, thresh1)
 	#find bulge
 	# perform a connected component analysis on the thresholded
 	# image, then initialize a mask to store only the "large" components
@@ -200,7 +200,7 @@ def findbulge(sim_name, image, imagefile, sigma_bulge, sigma_disc):
 	else:
 		((hcX, hcY), hradius) = ((0,0),0)
 	print("disc radius:{}, disc centre({},{})".format(hradius, hcX,hcY))
-	cv2.imwrite('galaxygraphsbin'+sim_name+'/TESTradialprofile/opencvbulgediscimages/opencvbulgedisc'+str(sigma_bulge)+''+str(sigma_disc)+''+imagefile, imagecopy)
+	#cv2.imwrite('galaxygraphsbin'+sim_name+'/TESTradialprofile/opencvbulgediscimages/opencvbulgedisc'+str(sigma_bulge)+''+str(sigma_disc)+''+imagefile, imagecopy)
 	cv2.destroyAllWindows()
 	return bradius,hradius, (hcX,hcY), (bcX,bcY)
 
@@ -319,15 +319,35 @@ def plotradialprofile(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, pcov1,
 	#plt.close('all')
 	#cv2.destroyAllWindows()
 	
-def calculaten_total(rad, r, i_e, r_e, stdbins):
+def calculaten_total(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, nr):
 	try:
-		n1, pcov1 = curve_fit(lambda x,n: SersicProfile(x, i_e, r_e, n), r, rad, p0=2, bounds=(0.1,8), sigma=stdbins, absolute_sigma=True)
+		n1, pcov1 = curve_fit(lambda x,n: SersicProfile(x, i_e, r_e, n), r, rad, p0=2, bounds=(0.01,8), sigma=stdbins, absolute_sigma=True)
+		n_total=n1[0]
+		n_error=pcov1[0]
 	except:
-		n1=[np.nan]
-		pcov1=[np.nan]
+		n_total=[np.nan]
+		n_error=[np.nan]
 		print('n1 nan')
-	print("I_e={}, R_e={}, n_disc={}".format(i_e, r_e, n1))
-	return n1, pcov1
+	print("I_e={}, R_e={}, n_disc={}".format(i_e, r_e, n_total))
+	
+
+	try:
+		poptdisc, pcovdisc = curve_fit(lambda x,n: SersicProfile(x, i_e, r_e, n), r[bindex:bhindex], rad[bindex:bhindex], p0=1, sigma=stdbins[bindex:bhindex], bounds=(0,2), absolute_sigma=True)
+		n_disc=poptdisc[0]
+		n_disc_error=pcovdisc[0,0]
+		print("I_edisc={}, R_edisc={}, n_disc={}".format(i_e, r_e, n_disc))
+		isolated_discsim=SersicProfile(r, i_e, r_e, n_disc)
+		isolated_bulge= rad - isolated_discsim
+		isolated_bulge[isolated_bulge<0]=0
+		i_ebulge, r_ebulge, centralbrightnessbulge, totalbrightnessbulge= findeffectiveradius(isolated_bulge[0:bhindex], r[0:bhindex], nr[0:bhindex]) 
+		poptbulge, pcovbulge = curve_fit(lambda x,n: SersicProfile(x, i_ebulge, r_ebulge, n), r[0:bindex], isolated_bulge[0:bindex],p0=3, sigma=stdbins[0:bindex], bounds=(0,10), absolute_sigma=True)
+		n_bulge= poptbulge[0]
+		n_bulge_error= pcovbulge[0,0]
+		print("I_ebulge={}, R_ebulge={}, n_bulge={}".format(i_ebulge,r_ebulge, n_bulge))
+	except:
+		n_disc=n_bulge=n_disc_error=n_bulge_error=np.nan
+		print('n nan')
+	return n_total, n_error,n_disc,n_bulge,n_disc_error,n_bulge_error
 
 def calculateSersicIndices(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, nr, sim_name, imagefile,sigma_bulge,sigma_disc,radbintype):
 	a=np.empty((3,3))
@@ -408,31 +428,43 @@ def vary_sigma(image, imagefile, sim_name):
 	n_error_bestdisc_list=[]
 	n_list=[]
 	n_error_list=[]
-	for i in np.linspace(1,6,15):
+	n_disc_list=[]
+	n_disc_error_list=[]
+	n_bulge_list=[]
+	n_bulge_error_list=[]
+	for i in np.linspace(1,sigma_max,25):
 		sigma_bulge = i
 		temp_disc_list=[]
 		temp_n_error_list=[]
 		temp_n_list=[]
-		for j in np.arange(0.01, i-0.5, 0.5):
+		for j in np.arange(0.01, i-0.5, 0.4):
 			sigma_disc = j
 			print(sigma_bulge,sigma_disc)
 			bindex,hindex, (hcX,hcY), (bcX,bcY) = findbulge(sim_name, BGRimage, imagefile, sigma_bulge, sigma_disc)
-			try:
-				i_e, r_e, centralbrightness, totalbrightness= findeffectiveradius(rad[0:int(hindex)], r[0:int(hindex)], nr[0:int(hindex)]) 
-				nr=nr[1:int(hindex)]
-				r=r[1:int(hindex)]
-				rad=rad[1:int(hindex)]
-				stdbins=stdbins[1:int(hindex)]
-				#bindex=int(bindex)
-				#hindex=int(hindex)
-				#bhindex=int((bindex+hindex)/2)
-				n1, pcov1=calculaten_total(rad, r, i_e, r_e, stdbins)
-				#n1, pcov1, poptdisca, pcovdisca, poptbulgea, pcovbulgea, poptdisc, pcovdisc,  poptbulge, pcovbulge, isolated_discsima, isolated_bulgea, isolated_bulgesima, totalsima, isolated_discsim, isolated_bulge, isolated_bulgesim, totalsim, i_ebulge, r_ebulge, i_ebulgea, r_ebulgea = calculateSersicIndices(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, nr, sim_name, imagefile, sigma_bulge,sigma_disc)
-				sigma_bulge_list.append(sigma_bulge),sigma_disc_list.append(sigma_disc),n_list.append(n1[0]), n_error_list.append(pcov1[0])
-				temp_disc_list.append(sigma_disc), temp_n_error_list.append(pcov1[0]), temp_n_list.append(n1[0])
-			except Exception as e:
-				print('2nd excep')
-				print(e)
+			print('bindex={},hindex={}'.format(bindex,hindex))
+			#try:
+			i_e, r_e, centralbrightness, totalbrightness= findeffectiveradius(rad[0:int(hindex)], r[0:int(hindex)], nr[0:int(hindex)]) 
+			print('i_e={},r_e={}'.format(i_e,r_e))
+			bhindex=int((bindex+hindex)/2)
+			bindex=int(bindex)
+			hindex=int(hindex)
+			nr1=nr[1:hindex]
+			r1=r[1:hindex]
+			rad1=rad[1:hindex]
+			stdbins1=stdbins[1:hindex]
+			n_total, n_error,n_disc,n_bulge,n_disc_error,n_bulge_error=calculaten_total(rad1, r1, i_e, r_e, stdbins1, bindex, bhindex, hindex, nr1)
+			print('ntotal={}, n_bulge={}'.format(n_total, n_bulge))
+			#n1, pcov1, poptdisca, pcovdisca, poptbulgea, pcovbulgea, poptdisc, pcovdisc,  poptbulge, pcovbulge, isolated_discsima, isolated_bulgea, isolated_bulgesima, totalsima, isolated_discsim, isolated_bulge, isolated_bulgesim, totalsim, i_ebulge, r_ebulge, i_ebulgea, r_ebulgea = calculateSersicIndices(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, nr, sim_name, imagefile, sigma_bulge,sigma_disc)
+			sigma_bulge_list.append(sigma_bulge),sigma_disc_list.append(sigma_disc)
+			n_list.append(n_total), n_error_list.append(n_error)
+			n_disc_list.append(n_disc), n_disc_error_list.append(n_disc_error)
+			n_bulge_list.append(n_bulge), n_bulge_error_list.append(n_bulge_error)
+		
+				#temp_disc_list.append(sigma_disc), temp_n_error_list.append(pcov1[0]), temp_n_list.append(n1[0])
+			#except Exception as e:
+				#print('2nd excep')
+				#print(e)
+		"""
 		try:
 			minerrorindex=np.argmin(temp_n_error_list)
 			sigma_best=temp_disc_list[minerrorindex]
@@ -442,35 +474,48 @@ def vary_sigma(image, imagefile, sim_name):
 			
 		except:
 			print('3rd excep')
+		"""
 	minerrorindex=np.argmin(n_error_list)
+	sigma_bulge_total_best=sigma_bulge_list[minerrorindex]
+	sigma_disc_total_best=sigma_disc_list[minerrorindex]
+
+	minbulgeerrorindex=np.argmin(n_bulge_error_list)
 	sigma_bulge_best=sigma_bulge_list[minerrorindex]
+	mindiscerrorindex=np.argmin(n_disc_error_list)
 	sigma_disc_best=sigma_disc_list[minerrorindex]
+	print('sigma_bulge_total_best={}, sigma_disc_total_best={}'.format(sigma_bulge_total_best, sigma_disc_total_best))
 	print('sigma_bulge_best={}, sigma_disc_best={}'.format(sigma_bulge_best, sigma_disc_best))
 
 	fig0=plt.figure(figsize=(6,12))
 	
-	plt.subplot(511)
-	plt.scatter(sigma_bulge_list, n_list)
-	plt.xlabel('sigma bulge'), plt.ylabel('n')
+	plt.subplot(411)
+	plt.errorbar(sigma_disc_list, n_list, yerr=n_error_list, fmt='o',color='r', capsize=0.5, elinewidth=0.5, label='n', alpha=0.7, markersize=1)
+	plt.xlabel('sigma disc'), plt.ylabel('n')
 	plt.title('Varying Sigma For Radial Profile')
+	plt.legend()
 	
-	plt.subplot(512)
-	plt.scatter(sigma_bulge_list, n_error_list)
-	plt.xlabel('sigma bulge'), plt.ylabel('error in n')
-	plt.ylim(0,100)
+	plt.subplot(412)
+	plt.errorbar(sigma_bulge_list, n_bulge_list, yerr=n_bulge_error_list, fmt='o',color='g', capsize=0.5, elinewidth=0.5, label='n', alpha=0.7, markersize=1)
+	plt.xlabel('sigma bulge'), plt.ylabel('n bulge')
+	plt.ylim(0,12)
 
-	plt.subplot(513)
-	plt.scatter(bulge_bestdisc_list, sigma_disc_best_list)
+	plt.subplot(413)
+	plt.errorbar(sigma_disc_list, n_disc_list, yerr=n_disc_error_list, fmt='o',color='orange', capsize=0.5, elinewidth=0.5, label='n', alpha=0.7, markersize=1)
+	plt.xlabel('sigma disc'), plt.ylabel('n disc')
+	plt.ylim(0,12)
+	"""
+	plt.subplot(514)
+	plt.plot(sigma_disc_list, n_list, 'ro', label='n', alpha=0.7, markersize=0.5)
+	plt.plot(sigma_disc_list, n_disc_list, 'yo', label='disc', alpha=0.7, markersize=0.5)
+	#plt.scatter(sigma_disc_best_list, n_bestdisc_list)
+	plt.xlabel('sigma disc'), plt.ylabel('n')	
+	plt.legend()
+	"""
+	plt.subplot(414)
+	plt.scatter(sigma_bulge_list, sigma_disc_list, alpha=0.7)
 	plt.xlabel('sigma bulge'),plt.ylabel('sigma disc')
 
-	plt.subplot(514)
-	plt.scatter(sigma_disc_best_list, n_bestdisc_list)
-	plt.xlabel('sigma disc'), plt.ylabel('n')	
-
-	plt.subplot(515)
-	plt.scatter(sigma_disc_best_list, n_error_bestdisc_list)
-	plt.xlabel('sigma disc'), plt.ylabel('error in n')
-	plt.ylim(0,100)
+	
 	plt.text(0.5, -0.1, 'Best sigma bulge ={}, Best sigma disc={}'.format(np.round(sigma_bulge_best,2), np.round(sigma_disc_best,2)))
 	plt.tight_layout()
 	plt.savefig('galaxygraphsbin'+sim_name+'/VaryingSigma'+imagefile)
@@ -487,7 +532,6 @@ def vary_radial_bins(image, imagefile, sim_name):
 		sigma_bulge = 5
 		sigma_disc = 1
 		bindex,hindex, (hcX,hcY), (bcX,bcY) = findbulge(sim_name, image, imagefile, sigma_bulge, sigma_disc)
-		#print(r_arr)
 		print(bindex,hindex)
 		hindex=(np.abs(r_arr-hindex)).argmin()
 		bindex=(np.abs(r_arr-bindex)).argmin()

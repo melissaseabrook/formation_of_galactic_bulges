@@ -15,6 +15,17 @@ from matplotlib import cm
 from mpl_toolkits.mplot3d import axes3d
 from scipy.interpolate import griddata 
 
+def logx(x):
+    if x !=0:
+        return np.log10(x)
+    else:
+        return 0
+
+def divide(x,y):
+    if y !=0:
+        return x/y
+    else:
+        return 0
 
 def sigmaclip(image, sigma, box_size):
     #shows relative fluctuations in pixel intensities
@@ -197,7 +208,7 @@ def radial_profile(image, center):
 	stdbins, bin_edges, binnumber=stats.binned_statistic(r.ravel(),image.ravel(), 'std', bins=len(radialprofile))
 	stdbins[0]=stdbins[1]
 	stdbins[stdbins<0.1]=0.1
-	radialprofile, r_arr, binnumber=stats.binned_statistic(r.ravel(),image.ravel(), 'mean', bins=len(radialprofile))
+	radialprofile, r_arr, binnumber=stats.binned_statistic(r.ravel(),image.ravel(), 'mean', bins=len(nr))
 	#meanbins, bin_edges, binnumber=stats.binned_statistic(r.ravel(),image.ravel(), 'mean', bins=len(radialprofile))
 	return radialprofile, r_arr, stdbins, nr
 
@@ -205,10 +216,21 @@ def findeffectiveradius(radialprofile, r, nr):
 	totalbrightness=np.sum(radialprofile * 2 * np.pi *r*nr)
 	centralbrightness=radialprofile[0]
 	cumulativebrightness=np.cumsum(radialprofile * 2 * np.pi *r*nr)
-	r_e_unnormalised=((np.abs((totalbrightness/2) - cumulativebrightness)).argmin())
-	r_e=r_e_unnormalised*(30.0/256)
-	i_e= radialprofile[r_e_unnormalised]
+	r_e_index=((np.abs((totalbrightness/2) - cumulativebrightness)).argmin())
+	r_e=r[r_e_index]
+	#r_e=r_e_unnormalised*(30.0/256)
+	i_e= radialprofile[r_e_index]
 	return i_e, r_e, centralbrightness, totalbrightness
+
+def findeffectiveradiusfrac(radialprofile, r, nr, frac):
+    print(len(radialprofile), len(r),len(nr))
+    totalbrightness=np.sum(radialprofile * 2 * np.pi *nr*r)
+    centralbrightness=radialprofile[0]
+    cumulativebrightness=np.cumsum(radialprofile * 2 * np.pi *nr*r)
+    r_e_index=((np.abs((totalbrightness*frac) - cumulativebrightness)).argmin())
+    r_e=r[r_e_index]
+    i_e= radialprofile[r_e_index]
+    return i_e, r_e, centralbrightness, totalbrightness
 
 def SersicProfile(r, I_e, R_e, n):
 	b=np.exp(0.6950 + np.log(n) - (0.1789/n))
@@ -220,7 +242,23 @@ def SersicProfilea(r, I_e, R_e, n, a):
 	G=(r/R_e)**(1/n)
 	return I_e*np.exp((-b*(G-1)))+a
 
+def findconcentration(rad, r, nr):
+    i20, r80, cb,tb=findeffectiveradiusfrac(rad, r, nr, 0.8)
+    i20, r20, cb, tb=findeffectiveradiusfrac(rad, r, nr, 0.2)
+    con=5*np.log10(r80/r20)
+    return con, r80,r20
+
+def findassymetry(image):
+    image_arr = np.array(image)
+    image_arr90 = np.rot90(image_arr)
+    image_arr180 = np.rot90(image_arr90)
+    resid= np.abs(image_arr-image_arr180)
+    asymm=(np.sum(resid))/(np.sum(np.abs(image_arr)))
+    return asymm
+
 def findsersicindex(image, bindex, dindex):
+    image2=np.average(image, axis=2, weights=[0.2126,0.587,0.114])
+    asymm=findassymetry(image2)
     if bindex>0:
         maxVal, center = findcenter(image)
         rad, r_arr,stdbins, nr=radial_profile(image,center)
@@ -228,6 +266,8 @@ def findsersicindex(image, bindex, dindex):
         r= np.linspace(0, max_r, num=len(rad))
         i_e, r_e, centralbrightness, totalbrightness= findeffectiveradius(rad, r, nr) 
         r=r_arr/256*30
+        con, r80, r20=findconcentration(rad, r_arr[1:], nr)
+
         nr=nr[1:int(dindex)]
         r=r[1:int(dindex)]
         rad=rad[1:int(dindex)]
@@ -238,7 +278,7 @@ def findsersicindex(image, bindex, dindex):
         bindex=int(bindex)
         dindex=int(dindex)
         bdindex=int((bindex+dindex)/2)
-
+        
         n1, pcov1 = curve_fit(lambda x,n: SersicProfile(x, i_e, r_e, n), r, rad, p0=3, bounds=(0.0001,10), sigma=stdbins, absolute_sigma=True)
         print("I_e={}, R_e={}, n_disc={}".format(i_e, r_e, n1))
         n_total=n1[0]
@@ -294,7 +334,10 @@ def findsersicindex(image, bindex, dindex):
         n_bulgea_error=0
         n_disca_error=0
         n_bulge_exp_error=0
-    return n_total, n_disca, n_bulgea, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disca_error, n_bulgea_error, n_disc_error, n_bulge_error, n_bulge_exp_error
+        con=0
+        r80=0
+        r20=0
+    return n_total, n_disca, n_bulgea, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disca_error, n_bulgea_error, n_disc_error, n_bulge_error, n_bulge_exp_error, con, r80, r20, asymm
 
 def drop_numerical_outliers(df, z_thresh):
     constrains=df.select_dtypes(include=[np.number]).apply(lambda x: np.abs(stats.zscore(x)) <z_thresh).all(axis=1)
@@ -304,13 +347,11 @@ def removeoutlierscolumn(df, column_name, sigma):
     df=df[np.abs(df[column_name]-df[column_name].mean())<=(sigma*df[column_name].std())]
     return df
 
-
 def invert(var):
     if var != 0:
         return(1/var)*10
     else:
         return 0
-
 
 def threeDplot(df, x,y,z, column_size, column_colour):
     df['BHmassbin']=pd.cut(df.logBHmass, 30)
@@ -401,12 +442,13 @@ def stackedhistogram(df, param1, param2, param3, param4):
     plt.title('Histograms of Sersic Indices and Errors')
     plt.hist([df[param1],df[param2],df[param3],df[param4]], bins=50, histtype='step', stacked=True, fill=False, color=colors, label=labels)
     plt.xlabel('Sersic Index')
-    
+    """
     plt.subplot(212)
     plt.hist([df[param1+'_error'],df[param2+'_error'],df[param3+'_error'],df[param4+'_error']], bins=50, histtype='step', stacked=True, fill=False, color=colors, label=labels)
     plt.xlabel('Error')
     plt.legend()
-    plt.savefig('galaxygraphsbin'+sim_name+'/histogramofsersicindices.png')
+    """
+    plt.savefig('galaxygraphsbin'+sim_name+'/histogramof'+param1+param2+param3+param4+'.png')
     plt.show()
 
 def subplothistograms(df, param1, param2, param3, param4, param5, param6):
@@ -460,45 +502,39 @@ def plotbulgetodisc(df, sim_name):
 
     print(df.shape)
     drop_numerical_outliers(df, 3)
-
     print(df.shape)
     df=df[df.n_total_error<10]
     print(df.shape)
-    #df=df[df.n_bulge_exp_error<10]
-    print(df.shape)
-    #df=df[df.n_bulge_error<10]
-    print(df.shape)
 
     df=df[df.n_total>0.05]
-    df['sSFR']=df.apply(lambda x: (x.SFR/x.mass), axis=1)
-    df=removeoutlierscolumn(df, 'sSFR', 2)
-    df=removeoutlierscolumn(df, 'Starmass', 2)
+    df['sSFR']=df.apply(lambda x: divide(x.SFR,x.mass), axis=1)
     df=df[df.sSFR>0]
     print(df.shape)
 
-    df['logsSFR']=df.apply(lambda x: np.log10(x.sSFR), axis=1)
-    df['logBHmass']=df.apply(lambda x: np.log10(x.BHmass), axis=1)
-    df['logmass']=df.apply(lambda x: np.log10(x.Starmass), axis=1)
-    df['sSFR']=df.apply(lambda x: (x.SFR/x.Starmass), axis=1)
-    df['logsSFR']=df.apply(lambda x: np.log10(x.sSFR), axis=1)
-    df['logBHmass']=df.apply(lambda x: np.log10(x.BHmass), axis=1)
-    df['logmass']=df.apply(lambda x: np.log10(x.Starmass), axis=1)
-
-    #stackedhistogram(df, 'n_total','n_disc','n_bulge','n_bulge_exp')
-    #subplothistograms(df, 'n_total','n_disc','n_bulge','n_disca','n_bulgea','n_bulge_exp')
-
+    df['logsSFR']=df.apply(lambda x: logx(x.sSFR), axis=1)
+    df['logBHmass']=df.apply(lambda x: logx(x.BHmass), axis=1)
+    df['logmass']=df.apply(lambda x: logx(x.mass), axis=1)
+    df['sSFR']=df.apply(lambda x: divide(x.SFR,x.mass), axis=1)
+    df['logsSFR']=df.apply(lambda x: logx(x.sSFR), axis=1)
+    df['logBHmass']=df.apply(lambda x: logx(x.BHmass), axis=1)
+    df['logmass']=df.apply(lambda x: logx(x.mass), axis=1)
     df['dtototal']=df.apply(lambda x: (1-x.btdintensity), axis=1)
-    #colorbarplot(df, 'n_total', 'DiscToTotal', 'logmass', 'logsSFR', 'BHmass')
-    threeDplot(df, 'n_total','DiscToTotal','logBHmass', 'mass', 'logsSFR')
-    exit()
-    
     df['dtbradius']=df.apply(lambda x: invertbtd(x.btdradius), axis=1)
     df['dtbintensity']=df.apply(lambda x: invertbtd(x.btdintensity), axis=1)
     df['ZBin']=pd.qcut(df.Z, 6)
+
+    #stackedhistogram(df, 'n_total','DiscToTotal','con','asymm')
+    #subplothistograms(df, 'n_total','n_disc','n_bulge','n_disca','n_bulgea','n_bulge_exp')
+    colorbarplot(df, 'asymm', 'logBHmass', 'logmass', 'logsSFR', 'BHmass')
+    colorbarplot(df, 'con', 'logBHmass', 'logmass', 'logsSFR', 'BHmass')
+    exit()
+    threeDplot(df, 'asymm','DiscToTotal','logBHmass', 'mass', 'logsSFR')
+    threeDplot(df, 'con','DiscToTotal','logBHmass', 'mass', 'logsSFR')
+    exit()
     
-    """
+    
     size=100*(df.mass)/(df.mass.max())
-    g=sns.PairGrid(df, vars=['DiscToTotal','dtbradius','dtbintensity','n_total','n_disca','n_disc','n_bulgea','n_bulge','SFR', 'BHmass'])
+    g=sns.PairGrid(df, vars=['DiscToTotal','dtbradius','dtbintensity','n_total','n_disc','n_bulge','SFR', 'BHmass','con','asymm'])
     g.map_diag(sns.kdeplot)
     g.hue_vals=df['mass']
     g.hue_names=df['mass'].unique()
@@ -507,8 +543,10 @@ def plotbulgetodisc(df, sim_name):
     plt.tight_layout()
     plt.subplots_adjust(top=0.9)
     g.fig.suptitle('PairPlot for relationships between paramters, coloured by galaxy size')
-    g.savefig('galaxygraphsbin'+sim_name+'/allbulgeparametersrelationships.png')
+    g.savefig('galaxygraphsbin'+sim_name+'/asymmconparametersrelationships.png')
     plt.show()
+
+    exit()
     plt.close()
     
     size=100*(df.mass)/(df.mass.max())
@@ -523,7 +561,6 @@ def plotbulgetodisc(df, sim_name):
     g.savefig('galaxygraphsbin'+sim_name+'/selectedbulgeparametersrelationships.png')
     plt.show()
     plt.close()
-   """ 
    
     stackedhistogram(df, 'n_total','n_disc','n_bulge','n_disca','n_bulgea','n_bulge_exp')
     plt.close()
@@ -546,7 +583,7 @@ def plotbulgetodisc(df, sim_name):
     plt.close()
 
 if __name__ == "__main__":
-    sim_name='RefL0050N0752'
+    sim_name='RecalL0025N0752'
     read_data=True
     if(read_data):
         print('.........reading.......')
@@ -558,9 +595,9 @@ if __name__ == "__main__":
         for filename in df['filename']:
             BGRimage=cv2.imread('galaxyimagebin'+sim_name+'/'+filename)
             btdradius, btdintensity, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius =findandlabelbulge(BGRimage, filename, sim_name)
-            n_total, n_disca, n_bulgea, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disca_error, n_bulgea_error, n_disc_error, n_bulge_error, n_bulge_exp_error=findsersicindex(BGRimage, bradius, hradius)
-            discbulgetemp.append([filename, btdradius, btdintensity,n_total, n_disca, n_bulgea, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disca_error, n_bulgea_error, n_disc_error, n_bulge_error, n_bulge_exp_error, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius])
-        discbulgedf=pd.DataFrame(discbulgetemp, columns=['filename', 'btdradius', 'btdintensity','n_total','n_disca','n_bulgea','n_disc','n_bulge','n_bulge_exp', 'n_total_error', 'n_disca_error', 'n_bulgea_error', 'n_disc_error', 'n_bulge_error', 'n_bulge_exp_error', 'star_count', 'discradius', 'bulgeradius', 'disc_intensity', 'bulge_intensity', 'btotalintensity', 'btotalradius'])
+            n_total, n_disca, n_bulgea, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disca_error, n_bulgea_error, n_disc_error, n_bulge_error, n_bulge_exp_error, con, r80, r20, asymm=findsersicindex(BGRimage, bradius, hradius)
+            discbulgetemp.append([filename, btdradius, btdintensity,n_total, n_disca, n_bulgea, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disca_error, n_bulgea_error, n_disc_error, n_bulge_error, n_bulge_exp_error, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius, con, r80, r20, asymm])
+        discbulgedf=pd.DataFrame(discbulgetemp, columns=['filename', 'btdradius', 'btdintensity','n_total','n_disca','n_bulgea','n_disc','n_bulge','n_bulge_exp', 'n_total_error', 'n_disca_error', 'n_bulgea_error', 'n_disc_error', 'n_bulge_error', 'n_bulge_exp_error', 'star_count', 'discradius', 'bulgeradius', 'disc_intensity', 'bulge_intensity', 'btotalintensity', 'btotalradius', 'con', 'r80', 'r20', 'asymm'])
         df.filename.astype(str)
         discbulgedf.filename.astype(str)
         df=pd.merge(df, discbulgedf, on=['filename'], how='outer')
