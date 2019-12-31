@@ -1,53 +1,63 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Sep 11 16:24:33 2019
-
-@author: Melissa
-"""
-
-# -*- coding: utf-8 -*-
-"""
-Spyder Editor
-
-This is a temporary script file.
-"""
 import eagleSqlTools as sql
 import numpy as np
 import matplotlib .pyplot as plt
-# Array of chosen simulations. entries refer to simulation name and comoving box length
-mySims = np.array ([('RefL0100N1504',100.),('AGNdT9L0050N0752',50.),('RecalL0025N0752', 25.)])
-#Uses eagleSQLTools module to connect to database for username and password
-#If username and password not given, module will prompt for it.
-con = sql.connect("hwg083", password="KJHjqm91")
-for sim_name,sim_size in mySims:
-    print(sim_name)
-    # construct and execute query for eacj simulation. This query returns the number of galaxies 
-    # for a given 30 pkpc aperture stellar mass bin (centred with 0.2 dex width)
-    myQuery = "SELECT TOP 100\
-                    SH.VmaxRadius as r_max, \
-                	SH.Vmax as v_max \
-                FROM \
-                    %s_SubHalo as SH, \
-                    %s_Aperture as AP \
-                WHERE \
-                    SH.GalaxyID = AP.GalaxyID and \
-                    AP.ApertureSize = 30 and \
-                    AP.Mass_Star > 1e8 and \
-                    AP.Mass_Star < 1e9 and \
-                    SH.SnapNum = 27 \
-                ORDER BY VmaxRadius"%(sim_name, sim_name)
+import urllib
 
-    # Execute query .
+mySims = np.array ([('RefL0050N0752', 50.)])
+
+con = sql.connect("hwg083", password="KJHjqm91")
+for sim_name , sim_size in mySims:
+    print(sim_name)
+    myQuery = "SELECT TOP 100 \
+                    ref.GalaxyID as ProjGalaxyID, \
+                    SH.GalaxyID as DescGalaxyID, \
+                    SH.DescendantID as DescID, \
+                    SH.Redshift as z, \
+                    SH.Image_Face as face, \
+                    SH.HalfMassRad_Star as HalfMassRadius, \
+                    AP.VelDisp as VelDisp, \
+                    AP.SFR as SFR, \
+                    SH.StellarInitialMass as StellarInitialMass, \
+                    SH.BlackHoleMassAccretionRate as BHAccretionrate, \
+                    SH.VmaxRadius as Vmaxradius, \
+                    MK.DiscToTotal as DiscToTotal\
+                FROM \
+                    %s_Subhalo as SH, \
+                    %s_Subhalo as ref, \
+                    %s_Aperture as AP, \
+                    %s_MorphoKinem as MK \
+                WHERE \
+                    ref.MassType_Star between 1.0e10 and 2.0e10 and \
+                    ref.StarFormationRate between 0.1 and 5 and \
+                    ref.MassType_BH between 1.0e6 and 1.0e7 and \
+                    ref.SnapNum=28 and \
+                    ((SH.SnapNum > ref.SnapNum and ref.GalaxyID between SH.GalaxyID and SH.TopLeafID) or (SH.SnapNum <= ref.SnapNum and SH.GalaxyID between ref.GalaxyID and ref.TopLeafID)) and \
+                    SH.GalaxyID = AP.GalaxyID and \
+                    SH.GalaxyID = MK.GalaxyID and \
+                    AP.ApertureSize = 30 and\
+                    ref.Image_face IS NOT null and\
+                    ref.GalaxyID in (SELECT TOP 10\
+                                        refA.GalaxyID as ProjGalaxyID \
+                                    FROM \
+                                        %s_Subhalo as SHA, \
+                                        %s_Subhalo as refA\
+                                    WHERE \
+                                        refA.MassType_Star between 1.0e10 and 2.0e10 and \
+                                        refA.StarFormationRate between 0.1 and 1 and \
+                                        refA.MassType_BH between 1.0e6 and 1.0e7 and \
+                                        refA.SnapNum=28 and \
+                                        ((SHA.SnapNum > refA.SnapNum and refA.GalaxyID between SHA.GalaxyID and SHA.TopLeafID) or (SHA.SnapNum <= refA.SnapNum and SHA.GalaxyID between refA.GalaxyID and refA.TopLeafID)) \
+                                    GROUP BY \
+                                        refA.GalaxyID \
+                                    HAVING COUNT(refA.GalaxyID)>25) \
+                ORDER BY \
+                    SH.Redshift"%(sim_name, sim_name, sim_name, sim_name, sim_name, sim_name)
+    # Execu te que ry .
     myData = sql.execute_query (con , myQuery)
-    print(myData[0:20])
-    # Normalize by volume and bin width .
-    plt.scatter(myData['r_max'], np.log10(myData['v_max']), label= sim_name , linewidth =0.1, alpha=0.8)
-    
-# Label Plot
-plt.xlabel(r"log$_{10}$ M$_{∗}$ [M$_{\odot}$]", fontsize =20)
-plt.ylabel(r"log$_{10}$ dn/dlog$_{10}$(M$_{∗}$) [cMpc$^{−3}$]", fontsize =20)
-plt.tight_layout()
-plt.legend()
-plt.show()
-plt.savefig('test.png')
-plt.close()
+    # Norma l ize by volume and b in w id th .
+    plt.plot(myData['SFR'], myData['Starmass'], label= sim_name , linewidth =2)
+    #plt.xlabel(r'log_${10}$ M$ {∗}$ [ M$ {\odot}$]', fontsize =20)
+    #plt.ylabel(r'log_${10}$ dn/dlog$ {10}$( M$ {∗}$) [cMpc$^{−3}$]', fontsize =20)
+    plt.tight_layout()
+    plt.legend()
+    plt.show()
