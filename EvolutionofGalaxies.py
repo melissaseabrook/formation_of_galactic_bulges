@@ -913,7 +913,7 @@ def plotbulgetodisc(df, sim_name):
     plt.close()
 
 if __name__ == "__main__":
-    sim_name='RecalL0025N0752'
+    sim_name='RefL0050N0752'
     #query_type=mainbranch or allbranches
     query_type='mainbranch'
     read_data=True
