@@ -14,6 +14,9 @@ from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm
 from mpl_toolkits.mplot3d import axes3d
 from scipy.interpolate import griddata 
+import statmorph
+import photutils
+import scipy.ndimage as ndi
 
 def logx(x):
     if x !=0:
@@ -322,22 +325,50 @@ def findsersicindex(image, bindex, dindex):
 
 
     else:
-        n_total=0
-        n_bulge=0
-        n_disc=0
-        n_bulgea=0
-        n_disca=0
-        n_bulge_exp=0
-        n_total_error=0
-        n_bulge_error=0
-        n_disc_error=0
-        n_bulgea_error=0
-        n_disca_error=0
-        n_bulge_exp_error=0
-        con=0
-        r80=0
-        r20=0
+        n_total=np.nan
+        n_bulge=np.nan
+        n_disc=np.nan
+        n_bulgea=np.nan
+        n_disca=np.nan
+        n_bulge_exp=np.nan
+        n_total_error=np.nan
+        n_bulge_error=np.nan
+        n_disc_error=np.nan
+        n_bulgea_error=np.nan
+        n_disca_error=np.nan
+        n_bulge_exp_error=np.nan
+        con=np.nan
+        r80=np.nan
+        r20=np.nan
     return n_total, n_disca, n_bulgea, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disca_error, n_bulgea_error, n_disc_error, n_bulge_error, n_bulge_exp_error, con, r80, r20, asymm
+
+def runstatmorph(image):
+    image2=np.average(image, axis=2, weights=[0.2126,0.587,0.114])
+    gain = 1000.0
+    threshold = photutils.detect_threshold(image2, 1.5)
+    npixels = 7  # minimum number of connected pixels
+    segm = photutils.detect_sources(image2, threshold, npixels)
+    # Keep only the largest segment
+    label = np.argmax(segm.areas) + 1
+    segmap = segm.data == label
+    segmap_float = ndi.uniform_filter(np.float64(segmap), size=10)
+    segmap = segmap_float > 0.5
+    source_morphs = statmorph.source_morphology(image2, segmap, gain=gain)
+    morph = source_morphs[0]
+    if morph.flag ==1:
+        morph_c=morph.concentration
+        morph_asymm=morph.asymmetry
+        morph_smoothness=morph.smoothness
+        morph_sersic_rhalf=morph.sersic_rhalf*30/256
+        morph_xc_asymmetry=morph.xc_asymmetry
+        morph_yc_asymmetry=morph.yc_asymmetry
+        if morph.flag_sersic==0:
+            morph_sersic_n=morph.sersic_n
+        else:
+            morph_sersic_n=np.nan
+    else:
+        morph_c=morph_asymm=morph_sersic_n=morph_smoothness=morph_sersic_rhalf=morph_xc_asymmetry=morph_yc_asymmetry=np.nan
+    return morph_c, morph_asymm, morph_sersic_n, morph_smoothness, morph_sersic_rhalf, morph_xc_asymmetry, morph_yc_asymmetry
 
 def drop_numerical_outliers(df, z_thresh):
     constrains=df.select_dtypes(include=[np.number]).apply(lambda x: np.abs(stats.zscore(x)) <z_thresh).all(axis=1)
@@ -352,6 +383,24 @@ def invert(var):
         return(1/var)*10
     else:
         return 0
+
+def cleanandtransformdata(df):
+    print(df.shape)
+    #drop_numerical_outliers(df, 3)
+    #df=df=df.reset_index()
+    #print(df.shape)
+    
+    df['BulgeToTotal']=df.apply(lambda x: (1-x.DiscToTotal), axis=1)
+    df['logBHmass']=df.apply(lambda x: logx(x.BHmass), axis=1)
+    df['logmass']=df.apply(lambda x: logx(x.mass), axis=1)
+    df['sSFR']=df.apply(lambda x: divide(x.SFR,x.mass), axis=1)
+    df['logsSFR']=df.apply(lambda x: logx(x.sSFR), axis=1)
+    df['dtototal']=df.apply(lambda x: (1-x.btdintensity), axis=1)
+    df['dtbradius']=df.apply(lambda x: invertbtd(x.btdradius), axis=1)
+    df['dtbintensity']=df.apply(lambda x: invertbtd(x.btdintensity), axis=1)
+    df['morph_asymm']=df.apply(lambda x: np.abs(x.morph_asymm), axis=1)
+    df['ZBin']=pd.qcut(df.Z, 6)
+    print(df.shape)
 
 def threeDplot(df, x,y,z, column_size, column_colour):
     df['BHmassbin']=pd.cut(df.logBHmass, 30)
@@ -435,20 +484,21 @@ def colorbarplot(df, x,y, column_size, column_colour, column_marker):
     ax.savefig('galaxygraphsbin'+sim_name+'/'+x+'vs'+y+'.png')
     plt.show()
 
-def stackedhistogram(df, param1, param2, param3, param4):
+def stackedhistogram(df, param1, param2, param3, param4, param5):
     plt.subplot(211)
-    colors=['r','blue','green','purple']
-    labels=[param1, param2, param3, param4]
+    colors1=['yellow','r','blue','green','purple']
+    colors2=['r','blue','green','purple']
+    labels=[param5, param1, param2, param3, param4]
     plt.title('Histograms of Sersic Indices and Errors')
-    plt.hist([df[param1],df[param2],df[param3],df[param4]], bins=50, histtype='step', stacked=True, fill=False, color=colors, label=labels)
+    plt.hist([df[param5], df[param1],df[param2],df[param3],df[param4]], bins=50, histtype='step', stacked=True, fill=False, color=colors1, label=labels)
     plt.xlabel('Sersic Index')
-    """
-    plt.subplot(212)
-    plt.hist([df[param1+'_error'],df[param2+'_error'],df[param3+'_error'],df[param4+'_error']], bins=50, histtype='step', stacked=True, fill=False, color=colors, label=labels)
-    plt.xlabel('Error')
     plt.legend()
-    """
-    plt.savefig('galaxygraphsbin'+sim_name+'/histogramof'+param1+param2+param3+param4+'.png')
+    
+    plt.subplot(212)
+    plt.hist([df[param1+'_error'],df[param2+'_error'],df[param3+'_error'],df[param4+'_error']], bins=50, histtype='step', stacked=True, fill=False, color=colors2, label=labels)
+    plt.xlabel('Error')
+    plt.tight_layout()
+    plt.savefig('galaxygraphsbin'+sim_name+'/histogramof'+param1+param2+param3+param4+param5+'.png')
     plt.show()
 
 def subplothistograms(df, param1, param2, param3, param4, param5, param6):
@@ -499,30 +549,42 @@ def subplothistograms(df, param1, param2, param3, param4, param5, param6):
     plt.show()
 
 def plotbulgetodisc(df, sim_name):
-
-    print(df.shape)
-    drop_numerical_outliers(df, 3)
-    print(df.shape)
-    df=df[df.n_total_error<10]
-    print(df.shape)
-
-    df=df[df.n_total>0.05]
-    df['sSFR']=df.apply(lambda x: divide(x.SFR,x.mass), axis=1)
+    #drop_numerical_outliers(df, 3)
+    cleanandtransformdata(df)
+    df=df[df.con>0.1]
     df=df[df.sSFR>0]
+    #plt.plot(df.morph_sersic_n)
+    #plt.show()
+    stackedhistogram(df, 'n_total','n_disc','n_bulge','n_bulge_exp', 'morph_sersic_n')
+
+    plt.scatter(df.morph_sersic_n, df.n_total, alpha=0.5, label='n_total')
+    plt.scatter(df.morph_sersic_n, df.n_disc, alpha=0.5, label='n_disc')
+    plt.scatter(df.morph_sersic_n, df.n_bulge, alpha=0.5, label='n_bulge')
+    plt.scatter(df.morph_sersic_n, df.n_bulge_exp, alpha=0.5, label='n_bulge_exp')
+    plt.legend()
+    plt.xlabel('stat morph sersic n')
+    plt.tight_layout()
+    plt.savefig('galaxygraphsbin'+sim_name+'/nvsnstat.png')
+    plt.show()
+    
+
+    plt.subplot(211)
+    plt.hist(df.asymm, histtype='step',  fill=False, bins=20,label='asymmetry')
+    plt.hist(df.morph_asymm, histtype='step',  fill=False, bins=20, label='statmorph asymmetry')
+    plt.legend()
+    plt.subplot(212)
+    plt.hist(df.con, histtype='step',  fill=False,  bins=20,label='concentration')
+    plt.hist(df.morph_c, histtype='step',  fill=False,  bins=20, label='statmorph concentration')
+    plt.legend()
+    plt.savefig('galaxygraphsbin'+sim_name+'/CAhistogram.png')
+    plt.show()
+    exit()
+    colorbarplot(df, 'asymm', 'morph_asymm', 'logmass', 'logsSFR', 'logBHmass')
+    colorbarplot(df, 'con', 'morph_c', 'logmass', 'logsSFR', 'logBHmass')
+    exit()
     print(df.shape)
 
-    df['logsSFR']=df.apply(lambda x: logx(x.sSFR), axis=1)
-    df['logBHmass']=df.apply(lambda x: logx(x.BHmass), axis=1)
-    df['logmass']=df.apply(lambda x: logx(x.mass), axis=1)
-    df['sSFR']=df.apply(lambda x: divide(x.SFR,x.mass), axis=1)
-    df['logsSFR']=df.apply(lambda x: logx(x.sSFR), axis=1)
-    df['logBHmass']=df.apply(lambda x: logx(x.BHmass), axis=1)
-    df['logmass']=df.apply(lambda x: logx(x.mass), axis=1)
-    df['dtototal']=df.apply(lambda x: (1-x.btdintensity), axis=1)
-    df['dtbradius']=df.apply(lambda x: invertbtd(x.btdradius), axis=1)
-    df['dtbintensity']=df.apply(lambda x: invertbtd(x.btdintensity), axis=1)
-    df['ZBin']=pd.qcut(df.Z, 6)
-
+    #df=df[df.n_total>0.05]
     #stackedhistogram(df, 'n_total','DiscToTotal','con','asymm')
     #subplothistograms(df, 'n_total','n_disc','n_bulge','n_disca','n_bulgea','n_bulge_exp')
     colorbarplot(df, 'asymm', 'logBHmass', 'logmass', 'logsSFR', 'BHmass')
@@ -596,8 +658,9 @@ if __name__ == "__main__":
             BGRimage=cv2.imread('galaxyimagebin'+sim_name+'/'+filename)
             btdradius, btdintensity, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius =findandlabelbulge(BGRimage, filename, sim_name)
             n_total, n_disca, n_bulgea, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disca_error, n_bulgea_error, n_disc_error, n_bulge_error, n_bulge_exp_error, con, r80, r20, asymm=findsersicindex(BGRimage, bradius, hradius)
-            discbulgetemp.append([filename, btdradius, btdintensity,n_total, n_disca, n_bulgea, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disca_error, n_bulgea_error, n_disc_error, n_bulge_error, n_bulge_exp_error, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius, con, r80, r20, asymm])
-        discbulgedf=pd.DataFrame(discbulgetemp, columns=['filename', 'btdradius', 'btdintensity','n_total','n_disca','n_bulgea','n_disc','n_bulge','n_bulge_exp', 'n_total_error', 'n_disca_error', 'n_bulgea_error', 'n_disc_error', 'n_bulge_error', 'n_bulge_exp_error', 'star_count', 'discradius', 'bulgeradius', 'disc_intensity', 'bulge_intensity', 'btotalintensity', 'btotalradius', 'con', 'r80', 'r20', 'asymm'])
+            morph_c, morph_asymm, morph_sersic_n, morph_smoothness, morph_sersic_rhalf, morph_xc_asymmetry, morph_yc_asymmetry=runstatmorph(BGRimage)
+            discbulgetemp.append([filename, btdradius, btdintensity,n_total, n_disca, n_bulgea, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disca_error, n_bulgea_error, n_disc_error, n_bulge_error, n_bulge_exp_error, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius, con, r80, r20, asymm, morph_c, morph_asymm, morph_sersic_n, morph_smoothness, morph_sersic_rhalf, morph_xc_asymmetry, morph_yc_asymmetry])
+        discbulgedf=pd.DataFrame(discbulgetemp, columns=['filename', 'btdradius', 'btdintensity','n_total','n_disca','n_bulgea','n_disc','n_bulge','n_bulge_exp', 'n_total_error', 'n_disca_error', 'n_bulgea_error', 'n_disc_error', 'n_bulge_error', 'n_bulge_exp_error', 'star_count', 'discradius', 'bulgeradius', 'disc_intensity', 'bulge_intensity', 'btotalintensity', 'btotalradius', 'con', 'r80', 'r20', 'asymm', 'morph_c', 'morph_asymm', 'morph_sersic_n', 'morph_smoothness', 'morph_sersic_rhalf', 'morph_xc_asymmetry', 'morph_yc_asymmetry'])
         df.filename.astype(str)
         discbulgedf.filename.astype(str)
         df=pd.merge(df, discbulgedf, on=['filename'], how='outer')

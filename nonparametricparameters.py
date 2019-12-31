@@ -159,6 +159,29 @@ def findpetrosianradius(rad, nr, r_arr, bhindex):
     petradnewton=optimize.newton(petfunc, bhindex, args=(rad,nr, r_arr))
     return petradbisect, petradnewton
 
+
+def runstatmorph(image):
+    image2=np.average(image, axis=2, weights=[0.2126,0.587,0.114])
+    gain = 1000.0
+    threshold = photutils.detect_threshold(image2, 1.5)
+    npixels = 7  # minimum number of connected pixels
+    segm = photutils.detect_sources(image2, threshold, npixels)
+    # Keep only the largest segment
+    label = np.argmax(segm.areas) + 1
+    segmap = segm.data == label
+    segmap_float = ndi.uniform_filter(np.float64(segmap), size=10)
+    segmap = segmap_float > 0.5
+    source_morphs = statmorph.source_morphology(image2, segmap, gain=gain)
+    morph = source_morphs[0]
+    morph_c=morph.concentration
+    morph_asymm=morph.asymmetry
+    morph_sersic_n=morph.sersic_n
+    morph_smoothness=morph.smoothness
+    morph_sersic_rhalf=morph.sersic_rhalf*30/256
+    morph_xc_asymmetry=morph.xc_asymmetry
+    morph_yc_asymmetry=morph.yc_asymmetry
+    return morph_c, morph_asymm, morph_sersic_n, morph_smoothness, morph_sersic_rhalf, morph_xc_asymmetry, morph_yc_asymmetry
+
 def run_radial_profile(image, imagefile, sim_name):
     image2=np.average(image, axis=2, weights=[0.2126,0.587,0.114])
     #plots radius vs pixel intensity and its log
@@ -167,7 +190,7 @@ def run_radial_profile(image, imagefile, sim_name):
     bindex,hindex, (hcX,hcY), (bcX,bcY) = findbulge(image, imagefile)
     r=r_arr/256*30
     print(rad.shape, r_arr.shape, nr.shape)
-    exit()
+    
     con, r80, r20=findconcentration(rad, r, nr)
     bhindex=int((bindex+hindex)/2)
     #petradbisect, petradnewton=findpetrosianradius(rad, nr, r, bhindex)
@@ -184,7 +207,7 @@ def run_radial_profile(image, imagefile, sim_name):
     bhindex=int((bindex+hindex)/2)
     
     asymm=findassymetry(image2)
-    gain = 1000.0
+    
     """
     median=np.median(image2)
     std=np.std(image2)
@@ -195,22 +218,13 @@ def run_radial_profile(image, imagefile, sim_name):
     print(thresh2.data.shape)
     print(image2.shape)
     """
-    threshold = photutils.detect_threshold(image2, 1.5)
-    npixels = 5  # minimum number of connected pixels
-    segm = photutils.detect_sources(image2, threshold, npixels)
-    # Keep only the largest segment
-    label = np.argmax(segm.areas) + 1
-    segmap = segm.data == label
-    plt.imshow(segmap, origin='lower', cmap='gray')
-    segmap_float = ndi.uniform_filter(np.float64(segmap), size=10)
-    segmap = segmap_float > 0.5
-    source_morphs = statmorph.source_morphology(image2, segmap, gain=gain)
-    morph = source_morphs[0]
     n1, pcov1 = curve_fit(lambda x,n: SersicProfile(x, i_e, r_e, n), r, rad, p0=1, bounds=(0,8), sigma=stdbins, absolute_sigma=True)
     n1=n1[0]
 
+    morph_c, morph_asymm, morph_sersic_n, morph_smoothness, morph_sersic_rhalf, morph_xc_asymmetry, morph_yc_asymmetry=runstatmorph(image)
 
-
+"""
+    
     print('xc_centroid = {}, statmorph:{}'.format(bcX, morph.xc_centroid))
     print('yc_centroid ={}, statmorph:{}'.format(bcY, morph.yc_centroid))
     print('r20 ={}, statmorph:{}'.format(r20, (morph.r20)*30/256))
@@ -250,7 +264,7 @@ def run_radial_profile(image, imagefile, sim_name):
     print('sky_mean =', morph.sky_mean)
     print('sky_median =', morph.sky_median)
     print('sky_sigma =', morph.sky_sigma)
-    
+"""   
     print('con:{}, asymm:{}'.format(con, asymm))
     
 
