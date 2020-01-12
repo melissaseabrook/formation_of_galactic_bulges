@@ -262,7 +262,7 @@ def findassymetry(image):
 def findsersicindex(image, bindex, dindex):
     image2=np.average(image, axis=2, weights=[0.2126,0.587,0.114])
     asymm=findassymetry(image2)
-    if bindex>0:
+    try:
         maxVal, center = findcenter(image)
         rad, r_arr,stdbins, nr=radial_profile(image,center)
         max_r=np.sqrt(2)*15
@@ -324,7 +324,7 @@ def findsersicindex(image, bindex, dindex):
         print("n_bulge={}".format(n_bulge_exp))
 
 
-    else:
+    except:
         n_total=np.nan
         n_bulge=np.nan
         n_disc=np.nan
@@ -480,7 +480,7 @@ def colorbarplot(df, x,y, column_size, column_colour, column_marker):
     ax._legend.remove()
     ax.fig.colorbar(sm).set_label(column_colour)
     plt.subplots_adjust(top=0.9)
-    ax.fig.suptitle(''+x+' vs '+column_marker+', coloured by'+column_colour+', sized by'+column_size+', shaped by'+column_marker+'')
+    ax.fig.suptitle(''+x+' vs '+y+', coloured by'+column_colour+', sized by'+column_size+', shaped by'+column_marker+'')
     ax.savefig('galaxygraphsbin'+sim_name+'/'+x+'vs'+y+'.png')
     plt.show()
 
@@ -551,23 +551,41 @@ def subplothistograms(df, param1, param2, param3, param4, param5, param6):
 def plotbulgetodisc(df, sim_name):
     #drop_numerical_outliers(df, 3)
     cleanandtransformdata(df)
-    df=df[df.con>0.1]
+    #df=df[df.con>0.1]
     df=df[df.sSFR>0]
+    df=df[df.n_total_error<1]
+    df=df[df.n_total>0.4]
+    df=df[df.n_disc_error<1]
+    df=df[df.n_bulge_error<1]
+    df=df[df.n_bulge_exp_error<1]
     #plt.plot(df.morph_sersic_n)
     #plt.show()
+    threeDplot(df, 'asymm','DiscToTotal','logBHmass', 'logmass', 'logsSFR')
+    exit()
+    """
+    colorbarplot(df, 'morph_xc_asymmetry', 'DiscToTotal', 'logmass', 'logsSFR', 'logBHmass')
+    colorbarplot(df, 'btdintensity', 'BulgeToTotal', 'logmass', 'logsSFR', 'logBHmass')
+    colorbarplot(df, 'btdradius', 'BulgeToTotal', 'logmass', 'logsSFR', 'logBHmass')
+    colorbarplot(df, 'asymm', 'BulgeToTotal', 'logmass', 'logsSFR', 'logBHmass')
+    colorbarplot(df, 'n_total', 'DiscToTotal', 'logmass', 'logsSFR', 'logBHmass')
+    colorbarplot(df, 'morph_sersic_n', 'DiscToTotal', 'logmass', 'logsSFR', 'logBHmass')
+    colorbarplot(df, 'asymm', 'logBHmass', 'logmass', 'logsSFR', 'logBHmass')
+    colorbarplot(df, 'morph_xc_asymmetry', 'logBHmass', 'logmass', 'logsSFR', 'logBHmass')
+    colorbarplot(df, 'BulgeToTotal', 'logBHmass', 'logmass', 'logsSFR', 'logBHmass')
+    """
     stackedhistogram(df, 'n_total','n_disc','n_bulge','n_bulge_exp', 'morph_sersic_n')
 
     plt.scatter(df.morph_sersic_n, df.n_total, alpha=0.5, label='n_total')
     plt.scatter(df.morph_sersic_n, df.n_disc, alpha=0.5, label='n_disc')
     plt.scatter(df.morph_sersic_n, df.n_bulge, alpha=0.5, label='n_bulge')
-    plt.scatter(df.morph_sersic_n, df.n_bulge_exp, alpha=0.5, label='n_bulge_exp')
+    
     plt.legend()
     plt.xlabel('stat morph sersic n')
     plt.tight_layout()
     plt.savefig('galaxygraphsbin'+sim_name+'/nvsnstat.png')
     plt.show()
     
-
+    exit()
     plt.subplot(211)
     plt.hist(df.asymm, histtype='step',  fill=False, bins=20,label='asymmetry')
     plt.hist(df.morph_asymm, histtype='step',  fill=False, bins=20, label='statmorph asymmetry')
@@ -645,7 +663,7 @@ def plotbulgetodisc(df, sim_name):
     plt.close()
 
 if __name__ == "__main__":
-    sim_name='RecalL0025N0752'
+    sim_name='RefL0050N0752'
     read_data=True
     if(read_data):
         print('.........reading.......')
