@@ -70,32 +70,25 @@ def getdata(mySims, querytype):
                     SH.GalaxyID as DescGalaxyID, \
                     SH.DescendantID as DescID, \
                     SH.Redshift as z, \
-                    SH.Stars_Metallicity as Z, \
                     SH.Image_Face as face, \
                     SH.HalfMassRad_Star as HalfMassRadius, \
-                    AP.VelDisp as VelDisp, \
                     AP.Mass_Star as Starmass, \
                     AP.Mass_BH as BHmass, \
                     AP.Mass_DM as DMmass, \
-                    AP.Mass_Gas as Gasmass, \
                     AP.SFR as SFR, \
                     SH.StellarInitialMass as StellarInitialMass, \
                     SH.BlackHoleMassAccretionRate as BHAccretionrate, \
                     SH.Vmax as Vmax, \
                     SH.VmaxRadius as Vmaxradius, \
-                    MK.DiscToTotal as DiscToTotal,\
-                    MK.DispAnisotropy as DispAnisotropy, \
-                    MK.DMEllipticity as DMEllipticity, \
-                    MK.Ellipticity as StellarEllipticity, \
-                    MK.MedOrbitCircu as MedOrbitCircu, \
-                    MK.RotToDispRatio as RotToDispRatio \
+                    MK.DiscToTotal as DiscToTotal, \
+                    MK.Ellipticity as StellarEllipticity \
                 FROM \
                     %s_Subhalo as SH, \
                     %s_Subhalo as ref, \
                     %s_Aperture as AP, \
                     %s_MorphoKinem as MK \
                 WHERE \
-                    ref.MassType_Star between 1.0e10 and 2.0e10 and \
+                    ref.MassType_Star between 1.0e10 and 1.0e11 and \
                     ref.StarFormationRate between 0.1 and 15 and \
                     ref.MassType_BH between 1.0e6 and 1.0e7 and \
                     ref.SnapNum=28 and \
@@ -125,7 +118,7 @@ def getdata(mySims, querytype):
 if __name__ == "__main__":
     mySims = np.array(['RefL0050N0752'])
     #querytype = allbranches or mainbranch
-    querytype= 'mainbranch'
+    querytype= 'allbranches'
     getdata(mySims, querytype)
     
 

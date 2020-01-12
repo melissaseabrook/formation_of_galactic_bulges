@@ -19,6 +19,9 @@ from astropy.cosmology import Planck13
 import pylab
 import networkx as nx
 import matplotlib as mpl
+import statmorph
+import photutils
+import scipy.ndimage as ndi
 
 #sns.set_style('whitegrid')
 def logx(x):
@@ -265,7 +268,7 @@ def findassymetry(image):
 def findsersicindex(image, bindex, dindex):
     image2=np.average(image, axis=2, weights=[0.2126,0.587,0.114])
     asymm=findassymetry(image2)
-    if bindex>0:
+    try:
         maxVal, center = findcenter(image)
         rad, r_arr,stdbins, nr=radial_profile(image,center)
         max_r=np.sqrt(2)*15
@@ -313,20 +316,47 @@ def findsersicindex(image, bindex, dindex):
         print("n_bulge={}".format(n_bulge_exp))
 
 
-    else:
-        n_total=0
-        n_bulge=0
-        n_disc=0
-        n_bulge_exp=0
-        n_total_error=0
-        n_bulge_error=0
-        n_disc_error=0
-        n_bulge_exp_error=0
-        con=0
-        r80=0
-        r20=0
-        asymm=0
+    except:
+        n_total=np.nan
+        n_bulge=np.nan
+        n_disc=np.nan
+        n_bulge_exp=np.nan
+        n_total_error=np.nan
+        n_bulge_error=np.nan
+        n_disc_error=np.nan
+        n_bulge_exp_error=np.nan
+        con=np.nan
+        r80=np.nan
+        r20=np.nan
     return n_total, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disc_error, n_bulge_error, n_bulge_exp_error, con, r80, r20, asymm
+
+def runstatmorph(image):
+    image2=np.average(image, axis=2, weights=[0.2126,0.587,0.114])
+    gain = 1000.0
+    threshold = photutils.detect_threshold(image2, 1.5)
+    npixels = 7  # minimum number of connected pixels
+    segm = photutils.detect_sources(image2, threshold, npixels)
+    # Keep only the largest segment
+    label = np.argmax(segm.areas) + 1
+    segmap = segm.data == label
+    segmap_float = ndi.uniform_filter(np.float64(segmap), size=10)
+    segmap = segmap_float > 0.5
+    source_morphs = statmorph.source_morphology(image2, segmap, gain=gain)
+    morph = source_morphs[0]
+    if morph.flag ==1:
+        morph_c=morph.concentration
+        morph_asymm=morph.asymmetry
+        morph_smoothness=morph.smoothness
+        morph_sersic_rhalf=morph.sersic_rhalf*30/256
+        morph_xc_asymmetry=morph.xc_asymmetry
+        morph_yc_asymmetry=morph.yc_asymmetry
+        if morph.flag_sersic==0:
+            morph_sersic_n=morph.sersic_n
+        else:
+            morph_sersic_n=np.nan
+    else:
+        morph_c=morph_asymm=morph_sersic_n=morph_smoothness=morph_sersic_rhalf=morph_xc_asymmetry=morph_yc_asymmetry=np.nan
+    return morph_c, morph_asymm, morph_sersic_n, morph_smoothness, morph_sersic_rhalf, morph_xc_asymmetry, morph_yc_asymmetry
 
 def drop_numerical_outliers(df, z_thresh):
     constrains=df.select_dtypes(include=[np.number]).apply(lambda x: np.abs(stats.zscore(x)) <z_thresh).all(axis=1)
@@ -337,12 +367,14 @@ def removeoutlierscolumn(df, column_name, sigma):
     return df
 
 def getImage(path):
-    return OffsetImage(plt.imread('evolvinggalaxyimagebinmainbranchRecalL0025N0752/'+path), zoom=0.15)
+    return OffsetImage(plt.imread('evolvinggalaxyimagebinmainbranch'+sim_name+'/'+path), zoom=0.15)
 
 def cleanandtransformdata(df):
     print(df.shape)
     df.sort_values(['z','ProjGalaxyID'], ascending=[False,True], inplace=True)
-    df['lbt']=df.apply(lambda x: round(Planck13.lookback_time(x.z).value, 1), axis=1)
+    df['lbt']=df.apply(lambda x: -round(Planck13.lookback_time(x.z).value, 1), axis=1)
+    df['lbt2']=df.apply(lambda x: round(Planck13.lookback_time(x.z).value, 1), axis=1)
+
     df['lookbacktime']=df.apply(lambda x: -(Planck13.lookback_time(x.z).value)*(1e9), axis=1)
     df['dlbt']=df.groupby('ProjGalaxyID')['lookbacktime'].diff()
     df['dSFR']=df.groupby('ProjGalaxyID')['SFR'].diff()
@@ -378,6 +410,7 @@ def cleanandtransformdata(df):
     df['logmass']=df.apply(lambda x: logx(x.Starmass), axis=1)
     df['loggasmass']=df.apply(lambda x: logx(x.Gasmass), axis=1)
     df['sSFR']=df.apply(lambda x: divide(x.SFR,x.Starmass), axis=1)
+    df['logSFR']=df.apply(lambda x: logx(x.SFR), axis=1)
     df['logsSFR']=df.apply(lambda x: logx(x.sSFR), axis=1)
     df['dtototal']=df.apply(lambda x: (1-x.btdintensity), axis=1)
     df['dtbradius']=df.apply(lambda x: invertbtd(x.btdradius), axis=1)
@@ -771,14 +804,18 @@ def hierarchy_pos(G, root=None, width=1., vert_gap = 0.2, vert_loc = 0, leaf_vs_
 
 def plotmergertree(df, galaxyid, colourparam):
     df2=df[df.ProjGalaxyID==galaxyid]
+    df2=df2.set_index('DescID')
     
     fig, ax=plt.subplots()
     G=nx.from_pandas_edgelist(df=df2, source='DescID', target='DescGalaxyID')
-    G.add_nodes_from(nodes_for_adding=df2.DescGalaxyID.tolist())
-    tree=nx.bfs_tree(G,galaxyid)
-    pos=hierarchy_pos(tree,galaxyid)
-    df2=df2.set_index('DescGalaxyID')
+    G.add_nodes_from(nodes_for_adding=df2.DescID.tolist())
     df2=df2.reindex(G.nodes())
+    tree=nx.bfs_tree(G,galaxyid)
+    print(G)
+   
+    
+    pos=hierarchy_pos(tree,galaxyid)
+    print(pos)
     nx.draw_networkx(G, pos=pos, with_labels=True, font_size=9,node_color=df2[colourparam], cmap=plt.cm.plasma, vmin=df2[colourparam].min(), vmax=df2[colourparam].max(), ax=ax)
     sm=plt.cm.ScalarMappable(cmap=plt.cm.plasma, norm=plt.Normalize(vmin=df2[colourparam].min(), vmax=df2[colourparam].max()))
     sm.set_array([])
@@ -802,20 +839,19 @@ def plotmovinghistogram(df, histparam, binparam):
     df=df[(df.zrounded==0.) | (df.zrounded==0.2) | (df.zrounded==0.5) | (df.zrounded==1.)]
     z0df=z0df[['ProjGalaxyID', binparam]]
     #z0df['marker_bin']=pd.qcut(z0df[binparam], 6, labels=['vlow','low','medlow','medhigh','high','vhigh'])
-    z0df['marker_bin']=pd.qcut(z0df[binparam], 5, labels=['20','40','60','80','100'])
+    z0df['marker_bin']=pd.qcut(z0df[binparam],10, labels=['10','20','30','40','50','60','70','80','90','100'])
     #z0df['marker_bin']=pd.qcut(z0df[binparam], [0.0, 0.05, 0.3,0.7,0.95,1.0], labels=['20','40','60','80','100'])
     df=pd.merge(df, z0df, on=['ProjGalaxyID'], how='left',  suffixes=('','_proj'))
 
-    ax=[0,0,0,0]
     fig, axs =plt.subplots(4, 2, sharex=True, figsize=(9,6))
-    fig.suptitle('Time evolution of historgram of'+histparam+'showing distribution of'+binparam)
-    axs[0,0].set_title('0-20th percentile of '+binparam)
-    axs[0,1].set_title('80-100th percentile of '+binparam)
+    fig.suptitle('Time evolution of historgram of '+histparam+' showing distribution of '+binparam)
+    axs[0,0].set_title('0-10th percentile of '+binparam)
+    axs[0,1].set_title('90-100th percentile of '+binparam)
     binedgs=np.linspace(df[histparam].min(), df[histparam].max(), 20)
     for i,zi in enumerate([0., 0.2, 0.5, 1.]):
         #ax[i] = axs[i].twinx()
         zdf=df[df.zrounded==zi]
-        lowdf=zdf[zdf.marker_bin=='20']
+        lowdf=zdf[zdf.marker_bin=='10']
         highdf=zdf[zdf.marker_bin=='100']
         axs[i,0].hist(zdf[histparam], color="k", alpha=0.4,label='z='+str(zi), histtype='stepfilled', bins=binedgs)
         axs[i,1].hist(zdf[histparam], color="k", alpha=0.4,label='z='+str(zi), histtype='stepfilled', bins=binedgs)
@@ -847,25 +883,179 @@ def plotmovinghistogram(df, histparam, binparam):
     plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/Histogramof'+histparam+'highlighted'+binparam+'.png')
     plt.show()
 
+def plotbulgedisctrans(df, maxz, param, thresh, threshstep):
+    B2B =[]
+    D2D= []
+    B2D=[]
+    D2B=[]
+    BDB=[]
+    DBD=[]
+    df=df[df.z<maxz]
+    nmax=df.ProjGalaxyID.nunique()
+    for id in df.ProjGalaxyID.unique():
+        tempdf=df[df.ProjGalaxyID==id]
+        tempdf=tempdf.sort_values('lbt').reset_index()
+        if tempdf[param].min() > thresh-threshstep:
+            B2B.append(id)
+        elif tempdf[param].max() < thresh+threshstep:
+            D2D.append(id)
+        elif tempdf[param].iloc[0]>thresh:
+            if tempdf[param].iloc[tempdf.lbt.idxmax()] <thresh-(threshstep/2):
+                B2D.append(id)
+            else:
+                BDB.append(id)
+        elif tempdf[param].iloc[0]<thresh:
+            if tempdf[param].iloc[tempdf.lbt.idxmax()] >thresh+(threshstep/2):
+                D2B.append(id)
+            else:
+                DBD.append(id)
+    BDlist=[]
+    fig, ax =plt.subplots(2, 6, sharey='row', sharex='row', figsize=(12,6))
+    fig.suptitle('Time evolution'+param)
+    for id in B2B:
+        temp=df[df.ProjGalaxyID==id]
+        ax[1,0].plot(temp.lbt, temp[param], 'k', linewidth=0.1)
+        ax[1,0].plot([temp.lbt.min(),temp.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
+    ax[0,0].bar(0,len(B2B), color='b')
+    ax[0,0].text(-.1, 1, str(round(100*len(B2B)/nmax, 1)) +'%', fontsize=12, color='white')
+    for id in D2D:
+        temp=df[df.ProjGalaxyID==id]
+        ax[1,1].plot(temp.lbt, temp[param], 'k', linewidth=0.1)
+        ax[1,1].plot([temp.lbt.min(),temp.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
+    ax[0,1].bar(0,len(D2D), color='b')
+    ax[0,1].text(-.1, 1, ''+str(round(100*len(D2D)/nmax, 1))+'%', fontsize=12, color='white')
+    for id in B2D:
+        temp=df[df.ProjGalaxyID==id]
+        ax[1,2].plot(temp.lbt, temp[param], 'k', linewidth=0.1)
+        ax[1,2].plot([temp.lbt.min(),temp.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
+    ax[0,2].bar(0,len(B2D), color='b')
+    ax[0,2].text(-.1, 1, str(round(100*len(B2D)/nmax, 1))+'%', fontsize=12, color='white')
+    for id in D2B:
+        temp=df[df.ProjGalaxyID==id]
+        ax[1,3].plot(temp.lbt, temp[param], 'k', linewidth=0.1)
+        ax[1,3].plot([temp.lbt.min(),temp.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
+    ax[0,3].bar(0,len(D2B), color='b')
+    ax[0,3].text(-.1, 10, str(round(100*len(D2B)/nmax, 1))+'%', fontsize=12, color='black')
+    for id in BDB:
+        temp=df[df.ProjGalaxyID==id]
+        ax[1,4].plot(temp.lbt, temp[param], 'k', linewidth=0.1)
+        ax[1,4].plot([temp.lbt.min(),temp.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
+    ax[0,4].bar(0,len(BDB), color='b')
+    ax[0,4].text(-.1, 1, str(round(100*len(BDB)/nmax, 1)) +'%', fontsize=12, color='white')
+    for id in DBD:
+        temp=df[df.ProjGalaxyID==id]
+        ax[1,5].plot(temp.lbt, temp[param], 'k', linewidth=0.1)
+        ax[1,5].plot([temp.lbt.min(),temp.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
+    ax[0,5].bar(0,len(DBD), color='b')
+    ax[0,5].text(-.1, 1, str(round(100*len(DBD)/nmax, 1))+'%', fontsize=12, color='white')
+
+    ax[0,0].set_title('B'),ax[0,1].set_title('D'),ax[0,2].set_title('BD'),ax[0,3].set_title('DB'),ax[0,4].set_title('BDB'),ax[0,5].set_title('DBD')
+    ax[1,2].set_xlabel('look back time (Gyr)')
+    ax[1,0].set_ylabel(param)
+    ax[0,0].set_ylabel('count')
+    locs = ax[1,0].get_xticks()
+    print(locs)
+
+    labels = [-item for item in locs]
+    ax[1,0].set_xticklabels(labels)
+    #ax[0,1].xticks(locs, labels),ax[0,2].xticks(locs, labels),ax[0,3].xticks(locs, labels),ax[0,4].xticks(locs, labels), ax[0,5].xticks(locs, labels)
+    plt.subplots_adjust(wspace=0.1, hspace=0)
+    plt.savefig('Evolution of'+str(param)+'thresh'+str(thresh)+'.png')
+    plt.show()
+
+def binvalue(df, paramx, paramy, binno):
+    binedgs=np.linspace(df[paramx].min(), df[paramx].max(), binno)
+    binedgs2=np.linspace(df[paramx].min(), df[paramx].max(), binno -1)
+    medianvals=[]
+    lowquart=[]
+    uppquart=[]
+    for i in range(0,binno -1):
+        bindf=df[df[paramx]>binedgs[i]]
+        bindf=bindf[bindf[paramx]<binedgs[i+1]]
+        med=bindf[paramy].median()
+        low=bindf[paramy].quantile(0.10)
+        high=bindf[paramy].quantile(0.90)
+
+        medianvals.append(med)
+        lowquart.append(low)
+        uppquart.append(high)
+    return medianvals, binedgs2, lowquart, uppquart
+
+def plotmovingquantiles(df, paramx, paramy, binparam):
+    df['zrounded']=df.apply(lambda x: np.round(x.z, decimals=1), axis=1)
+    z0df=df[df.zrounded==0.]
+    df=df[(df.zrounded==0.) | (df.zrounded==0.2) | (df.zrounded==0.5) | (df.zrounded==1.)]
+    z0df=z0df[['ProjGalaxyID', binparam]]
+    #z0df['marker_bin']=pd.qcut(z0df[binparam], 5, labels=['20','40','60','80','100'])
+    z0df['marker_bin']=pd.qcut(z0df[binparam], 20, labels=['10','20','30','1','2','3','4','5','6','7','8','9','11','40','50','60','70','80','90','100'])
+    df=pd.merge(df, z0df, on=['ProjGalaxyID'], how='left',  suffixes=('','_proj'))
+    
+    fig, axs =plt.subplots(4, 2, sharex=True, sharey='col', figsize=(9,6))
+    fig.suptitle('Time evolution of '+paramx+paramy+' showing distribution of '+binparam)
+    axs[0,0].set_title('10th percentile of '+binparam)
+    axs[0,1].set_title('90th percentile of '+binparam)
+    for i,zi in enumerate([0., 0.2, 0.5, 1.]):
+        #ax[i] = axs[i].twinx()
+        zdf=df[df.zrounded==zi]
+        medianvals, binedgs, lowquart, highquart=binvalue(zdf, paramx, paramy, 20)
+        lowdf=zdf[zdf.marker_bin=='10']
+        highdf=zdf[zdf.marker_bin=='100']
+        axs[i,0].plot(binedgs, medianvals,color="k", label='z='+str(zi))
+        axs[i,0].plot(binedgs, lowquart,"k--")
+        axs[i,0].plot(binedgs, highquart,"k--")
+        axs[i,0].fill_between(binedgs, lowquart, highquart, color='grey', alpha=0.4)
+        axs[i,1].plot(binedgs, medianvals,color="k", label='z='+str(zi))
+        axs[i,1].plot(binedgs, lowquart,"k--")
+        axs[i,1].plot(binedgs, highquart,"k--")
+        axs[i,1].fill_between(binedgs, lowquart, highquart, color='grey', alpha=0.4)
+        axs[i,0].scatter(lowdf[paramx], lowdf[paramy],color="r", alpha=0.5)
+        axs[i,1].scatter(highdf[paramx], highdf[paramy],color="b", alpha=0.5)
+
+        axs[i,0].set_xlabel('')
+        axs[i,1].set_xlabel('')
+        axs[i,1].set_yticks([])
+        axs[i,0].set_ylabel(paramy)
+        axs[i,1].legend()
+        
+    axs[3,0].set_xlabel(paramx)
+    axs[3,1].set_xlabel(paramx)
+    plt.subplots_adjust(wspace=0, hspace=0)
+    plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/Plotof'+paramx+paramy+'highlighted'+binparam+'.png')
+    plt.show()
+
+
 def plotbulgetodisc(df, sim_name):
     cleanandtransformdata(df)
+    df=df[df.sSFR>0]
     
+    plotmovingquantiles(df, 'logmass', 'logsSFR', 'asymm')
+    exit()
+    plotbulgedisctrans(df,2,'BulgeToTotal',0.6,0.1 )
     plotmovinghistogram(df, 'logsSFR', 'asymm')
     exit()
+
+
+
+    maxnum=df.num.max()
+    print(maxnum)
+    maxdf=df[df.num>20]
+    ID=maxdf.ProjGalaxyID.unique()
+    print(ID)
+    
+    ID=1459291
+    ID=1250867
+    ID=1573529
+    plotmergertree(df, ID, 'Starmass')
+
+    #specificgalaxyplot(maxdf, ID, 'DiscToTotal', 'n_total', 'logsSFR', 'loggasmass')
+
+    #plotmovinghistogram(df, 'logsSFR', 'asymm')
+    
     
     #print(df[['z','dz','lookbacktime','dlbt','StellarInitialMass', 'dSIM', 'dSIMdz', 'dSIMdt', 'SFR']])
-    galaxyid=646493
+    galaxyid=1430974
     specificgalaxyplot(df, galaxyid, 'BulgeToTotal', 'n_total', 'logsSFR', 'loggasmass')
-    exit()
-    plotmergertree(df, galaxyid, 'StarMass')
-
-    plt.scatter(df.z, df.DescGalaxyID, 'r')
-    plt.scatter(df.z, df.DescID, 'y')
-    plt.scatter(df.z, df.ProjGalaxyID)
-
-    #sns.scatterplot('DescID','DescGalaxyID', data=df)
-    plt.show()
-    exit()
+    plotmergertree(df, galaxyid, 'logsSFR')
 
     plt.plot(df.z, df.BulgeToTotal)
     plt.plot(df.z, df.SFR)
@@ -873,12 +1063,11 @@ def plotbulgetodisc(df, sim_name):
     #specificgalplotmasses(df, galaxyid)
     #specificgalplotratesofvariabless(df, galaxyid)
     specificgalaxyplot(df, galaxyid, 'BulgeToTotal', 'n_total', 'logsSFR', 'logBHmass')
-    exit()
     evolutionplot(df, 'BulgeToTotal', 'logmass', 'logBHmass')
     #df work
     
-    df=df[df.sSFR>0]
-    print(df.shape)
+    
+    
 
     evolutionplot(df, 'Starmass', 'Starmass')
     threeDplot(df, 'z','DiscToTotal','logBHmass', 'Starmass', 'logsSFR')
@@ -913,38 +1102,40 @@ def plotbulgetodisc(df, sim_name):
     plt.close()
 
 if __name__ == "__main__":
-    sim_name='RefL0050N0752'
+    sim_names=['RefL0050N0752']
     #query_type=mainbranch or allbranches
-    query_type='mainbranch'
-    read_data=True
-    if(read_data):
-        print('........reading.......')
-        df=pd.read_csv('evolvingEAGLEbulgedisc'+query_type+'df'+sim_name+'.csv')
-    else:
-        print('........writing.......')
-        df=pd.read_csv('evolvingEAGLEimages'+query_type+'df'+sim_name+'.csv')
-        discbulgetemp=[]
-        for filename in df['filename']:
-            if filename == sim_name:
-                btdradius =btdintensity=star_count=hradius=bradius=disc_intensity=bulge_intensity=btotalintensity=btotalradius =0
-                n_total=n_disc=n_bulge=n_bulge_exp=n_total_error=n_disc_error=n_bulge_error=n_bulge_exp_error=con=r80=r20=asymm=0
-                discbulgetemp.append([filename, btdradius, btdintensity,n_total, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disc_error, n_bulge_error, n_bulge_exp_error, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius,con, r80, r20, asymm])
+    for sim_name in sim_names:
+        query_type='mainbranch'
+        read_data=True
+        if(read_data):
+            print('........reading.......')
+            df=pd.read_csv('evolvingEAGLEbulgedisc'+query_type+'df'+sim_name+'.csv')
+        else:
+            print('........writing.......')
+            df=pd.read_csv('evolvingEAGLEimages'+query_type+'df'+sim_name+'.csv')
+            discbulgetemp=[]
+            for filename in df['filename']:
+                if filename == sim_name:
+                    btdradius =btdintensity=star_count=hradius=bradius=disc_intensity=bulge_intensity=btotalintensity=btotalradius =0
+                    n_total=n_disc=n_bulge=n_bulge_exp=n_total_error=n_disc_error=n_bulge_error=n_bulge_exp_error=con=r80=r20=asymm=0
+                    discbulgetemp.append([filename, btdradius, btdintensity,n_total, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disc_error, n_bulge_error, n_bulge_exp_error, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius,con, r80, r20, asymm])
 
-            else:
-                BGRimage=cv2.imread('evolvinggalaxyimagebin'+query_type+''+sim_name+'/'+filename)
-                btdradius, btdintensity, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius =findandlabelbulge(BGRimage, filename, sim_name)
-                n_total, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disc_error, n_bulge_error, n_bulge_exp_error,con, r80, r20, asymm=findsersicindex(BGRimage, bradius, hradius)
-                discbulgetemp.append([filename, btdradius, btdintensity,n_total, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disc_error, n_bulge_error, n_bulge_exp_error, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius,con, r80, r20, asymm])
-        discbulgedf=pd.DataFrame(discbulgetemp, columns=['filename', 'btdradius', 'btdintensity','n_total','n_disc','n_bulge','n_bulge_exp', 'n_total_error', 'n_disc_error', 'n_bulge_error', 'n_bulge_exp_error', 'star_count', 'discradius', 'bulgeradius', 'disc_intensity', 'bulge_intensity', 'btotalintensity', 'btotalradius','con', 'r80', 'r20', 'asymm'])
-        
-        df.filename.astype(str)
-        discbulgedf.filename.astype(str)
-        print(discbulgedf)
-        print(df)
-        df=pd.merge(df, discbulgedf, on=['filename'], how='left').drop_duplicates()
-        print(df)
-        df.to_csv('evolvingEAGLEbulgedisc'+query_type+'df'+sim_name+'.csv')
+                else:
+                    BGRimage=cv2.imread('evolvinggalaxyimagebin'+query_type+''+sim_name+'/'+filename)
+                    btdradius, btdintensity, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius =findandlabelbulge(BGRimage, filename, sim_name)
+                    morph_c, morph_asymm, morph_sersic_n, morph_smoothness, morph_sersic_rhalf, morph_xc_asymmetry, morph_yc_asymmetry=runstatmorph(BGRimage)
+                    n_total, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disc_error, n_bulge_error, n_bulge_exp_error,con, r80, r20, asymm=findsersicindex(BGRimage, bradius, hradius)
+                    discbulgetemp.append([filename, btdradius, btdintensity,n_total, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disc_error, n_bulge_error, n_bulge_exp_error, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius,con, r80, r20, asymm, morph_c, morph_asymm, morph_sersic_n, morph_smoothness, morph_sersic_rhalf, morph_xc_asymmetry, morph_yc_asymmetry])
+            discbulgedf=pd.DataFrame(discbulgetemp, columns=['filename', 'btdradius', 'btdintensity','n_total','n_disc','n_bulge','n_bulge_exp', 'n_total_error', 'n_disc_error', 'n_bulge_error', 'n_bulge_exp_error', 'star_count', 'discradius', 'bulgeradius', 'disc_intensity', 'bulge_intensity', 'btotalintensity', 'btotalradius','con', 'r80', 'r20', 'asymm',  'morph_c', 'morph_asymm', 'morph_sersic_n', 'morph_smoothness', 'morph_sersic_rhalf', 'morph_xc_asymmetry', 'morph_yc_asymmetry'])
+            
+            df.filename.astype(str)
+            discbulgedf.filename.astype(str)
+            print(discbulgedf)
+            print(df)
+            df=pd.merge(df, discbulgedf, on=['filename'], how='left').drop_duplicates()
+            print(df)
+            df.to_csv('evolvingEAGLEbulgedisc'+query_type+'df'+sim_name+'.csv')
 
-    plotbulgetodisc(df, sim_name)
+        plotbulgetodisc(df, sim_name)
 
 
