@@ -285,11 +285,15 @@ def findsersicindex(image, bindex, dindex):
         n1, pcov1 = curve_fit(lambda x,n: SersicProfile(x, i_e, r_e, n), r, rad, p0=3, bounds=(0.0001,10), sigma=stdbins, absolute_sigma=True)
         print("I_e={}, R_e={}, n_disc={}".format(i_e, r_e, n1))
         n_total=n1[0]
-        n_total_error=pcov1[0,0]
+        res= np.abs(rad - SersicProfile(r, i_e,r_e,n_total))
+        n_total_error=np.sqrt(sum((res[bindex:bdindex]/stdbins[bindex:bdindex])**2))
+
 
         poptdisca, pcovdisca=curve_fit(SersicProfilea, r[bindex:dindex], rad[bindex:dindex], p0=(i_e, r_e, 1,0), bounds=((i_e-0.5,r_e-0.1,0.1,0), (i_e+0.5,r_e+0.1,2,20)), sigma=stdbins[bindex:dindex], absolute_sigma=True)
         n_disca=poptdisca[2]
-        n_disca_error=pcovdisca[2,2]
+        res= np.abs(rad - SersicProfile(r, i_e,r_e,n_disca))
+        n_disca_error=np.sqrt(sum((res[bindex:bdindex]/stdbins[bindex:bdindex])**2))
+
         print("I_edisca={}, R_edisca={}, n_disca={}, adisca={}".format(poptdisca[0], poptdisca[1], n_disca, poptdisca[3]))
         isolated_discsima=SersicProfilea(r, poptdisca[0], poptdisca[1], n_disca,poptdisca[3])
         isolated_bulgea= rad - isolated_discsima
@@ -297,12 +301,15 @@ def findsersicindex(image, bindex, dindex):
         i_ebulgea, r_ebulgea, centralbrightnessbulgea, totalbrightnessbulgea= findeffectiveradius(isolated_bulgea[0:bdindex], r[0:bdindex], nr[0:bdindex]) 
         poptbulgea, pcovbulgea=curve_fit(SersicProfilea, r[0:bindex], isolated_bulgea[0:bindex], p0=(i_ebulgea, r_ebulgea, 4,0), bounds=((i_ebulgea-1,r_ebulgea-0.1,0.01,0), (i_ebulgea+1,r_ebulgea+0.1,10,20)), sigma=stdbins[0:bindex], absolute_sigma=True)
         n_bulgea= poptbulgea[2]
-        n_bulgea_error= pcovbulgea[2,2]
+        res= np.abs(rad - isolated_discsima - SersicProfile(r, i_e,r_e,n_bulgea))
+        n_bulgea_error=np.sqrt(sum((res[bindex:bdindex]/stdbins[bindex:bdindex])**2))
         print("I_ebulgea={}, R_ebulgea={}, n_bulgea={}, abulgea={}".format(poptbulgea[0],poptbulgea[1], n_bulgea, poptbulgea[2]))
 
         poptdisc, pcovdisc = curve_fit(lambda x,n: SersicProfile(x, i_e, r_e, n), r[bindex:dindex], rad[bindex:dindex], sigma=stdbins[bindex:dindex], bounds=(0.0001,10), absolute_sigma=True)
         n_disc=poptdisc[0]
-        n_disc_error=pcovdisc[0,0]
+        res= np.abs(rad - SersicProfile(r, i_e,r_e,n_disc))
+        n_disc_error=np.sqrt(sum((res[bindex:bdindex]/stdbins[bindex:bdindex])**2))
+
         print("I_edisc={}, R_edisc={}, n_disc={}".format(i_e, r_e, n_disc))
         isolated_discsim=SersicProfile(r, i_e, r_e, n_disc)
         isolated_bulge= rad - isolated_discsim
@@ -310,7 +317,9 @@ def findsersicindex(image, bindex, dindex):
         i_ebulge, r_ebulge, centralbrightnessbulge, totalbrightnessbulge= findeffectiveradius(isolated_bulge[0:bdindex], r[0:bdindex], nr[0:bdindex]) 
         poptbulge, pcovbulge = curve_fit(lambda x,n: SersicProfile(x, i_ebulge, r_ebulge, n), r[0:bindex], isolated_bulge[0:bindex],p0=4, sigma=stdbins[0:bindex], bounds=(0,10), absolute_sigma=True)
         n_bulge= poptbulge[0]
-        n_bulge_error= pcovbulge[0,0]
+        res= np.abs(rad - isolated_discsim - SersicProfile(r, i_e,r_e,n_bulge))
+        n_bulge_error=np.sqrt(sum((res[bindex:bdindex]/stdbins[bindex:bdindex])**2))
+        
         print("I_ebulge={}, R_ebulge={}, n_bulge={}".format(i_ebulge,r_ebulge, n_bulge))
 
 
@@ -320,7 +329,9 @@ def findsersicindex(image, bindex, dindex):
         i_ebulge2, r_ebulge2, centralbrightnessbulge2, totalbrightnessbulge2= findeffectiveradius(isolated_bulge2[0:bdindex], r[0:bdindex], nr[0:bdindex]) 
         poptbulge2, pcovbulge2 = curve_fit(lambda x,n: SersicProfile(x, i_ebulge2, r_ebulge2, n), r[0:bindex], isolated_bulge[0:bindex],p0=4, bounds=(0,10), sigma=stdbins[0:bindex], absolute_sigma=True)
         n_bulge_exp= poptbulge[0]
-        n_bulge_exp_error= pcovbulge2[0,0]
+        res= np.abs(rad - exponential_discsim - SersicProfile(r, i_e,r_e,n_bulge_exp))
+        n_bulge_exp_error=np.sqrt(sum((res[bindex:bdindex]/stdbins[bindex:bdindex])**2))
+
         print("n_bulge={}".format(n_bulge_exp))
 
 
@@ -494,8 +505,12 @@ def stackedhistogram(df, param1, param2, param3, param4, param5):
     plt.xlabel('Sersic Index')
     plt.legend()
     
+    df[df.n_disc_error>20]=np.nan
+    df[df.n_bulge_error>20]=np.nan
+    df[df.n_bulge_exp_error>20]=np.nan
+    
     plt.subplot(212)
-    plt.hist([df[param1+'_error'],df[param2+'_error'],df[param3+'_error'],df[param4+'_error']], bins=50, histtype='step', stacked=True, fill=False, color=colors2, label=labels)
+    plt.hist([df[param1+'_error'],df[param2+'_error'],df[param3+'_error'],df[param4+'_error']], bins=20, histtype='step', stacked=True, fill=False, color=colors2, label=labels)
     plt.xlabel('Error')
     plt.tight_layout()
     plt.savefig('galaxygraphsbin'+sim_name+'/histogramof'+param1+param2+param3+param4+param5+'.png')
@@ -552,15 +567,20 @@ def plotbulgetodisc(df, sim_name):
     #drop_numerical_outliers(df, 3)
     cleanandtransformdata(df)
     #df=df[df.con>0.1]
+    
     df=df[df.sSFR>0]
-    df=df[df.n_total_error<1]
-    df=df[df.n_total>0.4]
-    df=df[df.n_disc_error<1]
-    df=df[df.n_bulge_error<1]
-    df=df[df.n_bulge_exp_error<1]
+    df[df.n_total_error>20]=np.nan
+    df[df.n_total<0.1] =np.nan
+    
+    """
+    df=df[df.n_disc_error<10]
+    df=df[df.n_bulge_error<10]
+    df=df[df.n_bulge_exp_error<10]
+    """
+    stackedhistogram(df, 'n_total','n_disc','n_bulge','n_bulge_exp', 'morph_sersic_n')
     #plt.plot(df.morph_sersic_n)
     #plt.show()
-    threeDplot(df, 'asymm','DiscToTotal','logBHmass', 'logmass', 'logsSFR')
+    #threeDplot(df, 'asymm','DiscToTotal','logBHmass', 'logmass', 'logsSFR')
     exit()
     """
     colorbarplot(df, 'morph_xc_asymmetry', 'DiscToTotal', 'logmass', 'logsSFR', 'logBHmass')

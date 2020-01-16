@@ -204,8 +204,8 @@ def findbulge(sim_name, image, imagefile, sigma_bulge, sigma_disc):
 	cv2.destroyAllWindows()
 	return bradius,hradius, (hcX,hcY), (bcX,bcY)
 
-def plotchisquared(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, i_ebulge,r_ebulge,isolated_bulge, nr):
-	calculateSersicIndices()
+def plotchisquared(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, i_ebulge,r_ebulge,isolated_bulge, nr, sim_name):
+	#calculateSersicIndices()
 	#chi vs n for n_disc
 	chisdisc=[]
 	chisbulge=[]
@@ -220,7 +220,7 @@ def plotchisquared(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, i_ebulge,
 	for n in np.linspace(0.15,5.0, 100):
 		n1, pcov1 = curve_fit(lambda x,n: SersicProfile(x, i_e, r_e, n), r, rad, p0=n, bounds=(n-0.001,n+0.001), sigma=stdbins, absolute_sigma=True)
 		n1=n1[0]
-		res= rad - SersicProfile(r, i_e,r_e,n)
+		res= np.abs(rad - SersicProfile(r, i_e,r_e,n))
 		n1_error=np.sqrt(sum((res[bindex:bhindex]/stdbins[bindex:bhindex])**2))
 		#n1_error=pcov1[0,0]
 		
@@ -228,19 +228,19 @@ def plotchisquared(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, i_ebulge,
 		n_disc=poptdisc[0]
 		#n_disc_error=pcovdisc[0,0]	
 		isolated_discsim=SersicProfile(r, i_e, r_e, n)
-		res= rad- isolated_discsim
-		n_disc_error=np.sqrt(sum((res[bhindex:hindex]/stdbins[bhindex:hindex])**2))
+		res= np.abs(rad- isolated_discsim)
+		n_disc_error=np.sqrt(sum((res[bindex:hindex]/stdbins[bindex:hindex])**2))
 		poptbulge, pcovbulge = curve_fit(lambda x,ni: SersicProfile(x, i_ebulge, r_ebulge, ni), r[0:bindex], isolated_bulge[0:bindex], sigma=stdbins[0:bindex], p0=n, bounds=(n-0.001,n+0.001), absolute_sigma=True)
 		n_bulge= poptbulge[0]
 		#n_bulge_error= pcovbulge[0,0]
-		res= rad - SersicProfile(r, i_ebulge, r_ebulge, n_bulge)
-		n_bulge_error=np.sqrt(sum((res[0:int(bindex/2)]/stdbins[0:int(bindex/2)])**2))
+		res= np.abs(isolated_bulge- SersicProfile(r, i_ebulge, r_ebulge, n_bulge))
+		n_bulge_error=np.sqrt(sum((res[2:bindex]/stdbins[2:bindex])**2))
 		
 		poptdisca, pcovdisca=curve_fit(SersicProfilea, r[bindex:hindex], rad[bindex:hindex], p0=(i_e, r_e, n,0), bounds=((i_e-1,r_e-0.1,n-0.001,0), (i_e+1,r_e+0.1,n+0.001,20)), sigma=stdbins[bindex:hindex], absolute_sigma=True)
 		n_disca=poptdisca[2]
 		#n_disc_errora=pcovdisca[2,2]
 		isolated_discsima=SersicProfilea(r, poptdisca[0], poptdisca[1],n_disca,poptdisca[3])
-		res= rad - isolated_discsim
+		res= np.abs(rad - isolated_discsim)
 		n_disc_errora=np.sqrt(sum((res[bhindex:hindex]/stdbins[bhindex:hindex])**2))
 
 		isolated_bulgea= rad - isolated_discsima
@@ -249,7 +249,7 @@ def plotchisquared(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, i_ebulge,
 		poptbulgea, pcovbulgea=curve_fit(SersicProfilea, r[0:bindex], isolated_bulgea[0:bindex], p0=(i_ebulgea, r_ebulgea, n,0), bounds=((i_ebulgea-1,r_ebulgea-0.1,n-0.001,0), (i_ebulgea+1,r_ebulgea+0.1,n+0.001,20)), sigma=stdbins[0:bindex], absolute_sigma=True)
 		n_bulgea= poptbulgea[2]
 		#n_bulge_errora=pcovdisca[2,2]
-		res= rad - SersicProfilea(r, i_ebulgea, r_ebulgea, n_bulgea, poptbulgea[3])
+		res= np.abs(rad - isolated_discsima-SersicProfilea(r, i_ebulgea, r_ebulgea, n_bulgea, poptbulgea[3]))
 		n_bulge_errora=np.sqrt(sum((res[0:int(bindex/2)]/stdbins[0:int(bindex/2)])**2))
 		
 		chisdisc.append(n_disc_error)
@@ -273,7 +273,7 @@ def plotchisquared(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, i_ebulge,
 	plt.xlabel('n'), plt.ylabel('$\chi ^2$')#, plt.ylim(0,0.025)
 	plt.title('Plot of $\chi ^2$ generated for each n')
 	plt.tight_layout()
-	plt.savefig('galaxygraphsbin'+sim_name+'/chisqrdvsn'+imagefile)
+	plt.savefig('galaxygraphsbin'+str(sim_name)+'/chisqrdvsn'+str(imagefile))
 	plt.show()
 
 def plotradialprofile(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, pcov1, pcovdisc,pcovdisca,pcovbulge,pcovbulgea,isolated_discsim,isolated_bulge,isolated_bulgesim, isolated_discsima,isolated_bulgea,isolated_bulgesima, totalsim, totalsima, n_disc,n_disca,n_bulge,n_bulgea, n1, sim_name, imagefile, sigma_bulge,sigma_disc,radbintype):
@@ -548,9 +548,8 @@ def vary_radial_bins(image, imagefile, sim_name):
 
 def run_radial_profile(image, imagefile, sim_name):
 	#vary_radial_bins(image, imagefile, sim_name)
-	vary_sigma(image, imagefile, sim_name)
-	exit()
-	
+	#vary_sigma(image, imagefile, sim_name)
+	radbintype='equalradius'
 	#plots radius vs pixel intensity and its log
 	maxVal, center = findcenter(image)
 	rad, stdbins, r_arr, nr=radial_profile(image,center)
@@ -558,13 +557,14 @@ def run_radial_profile(image, imagefile, sim_name):
 	r=r_arr/256*30
 	sigma_bulge = 5
 	sigma_disc = 1
-	bindex,hindex, (hcX,hcY), (bcX,bcY) = findbulge(image, imagefile, sigma_bulge, sigma_disc)
+	bindex,hindex, (hcX,hcY), (bcX,bcY) = findbulge(sim_name, image, imagefile, sigma_bulge, sigma_disc)
 	i_e, r_e, centralbrightness, totalbrightness= findeffectiveradius(rad[0:int(hindex)], r[0:int(hindex)], nr[0:int(hindex)]) 
 	#r= np.linspace(0, max_r, num=maxr)
 	nr=nr[1:int(hindex)]
 	r=r[1:int(hindex)]
 	rad=rad[1:int(hindex)]
 	stdbins=stdbins[1:int(hindex)]
+	std
 	#r= np.linspace(1/256, hindex/256, num=len(rad))
 	b1=bindex*30/256
 	h1=hindex*30/256
@@ -572,7 +572,11 @@ def run_radial_profile(image, imagefile, sim_name):
 	hindex=int(hindex)
 	bhindex=int((bindex+hindex)/2)
 	n1, pcov1, poptdisca, pcovdisca, poptbulgea, pcovbulgea, poptdisc, pcovdisc,  poptbulge, pcovbulge, isolated_discsima, isolated_bulgea, isolated_bulgesima, totalsima, isolated_discsim, isolated_bulge, isolated_bulgesim, totalsim, i_ebulge, r_ebulge, i_ebulgea, r_ebulgea = calculateSersicIndices(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, nr, sim_name, imagefile, sigma_bulge, sigma_disc, radbintype)
-
+	plotchisquared(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, i_ebulge,r_ebulge,isolated_bulge, nr, sim_name)
+	
+	exit()
+	
+	
 	"""
 	print("I_e={}, R_e={}".format(i_e, r_e))
 	print("brad={}, hrad={}, bind={}, hind={}".format(b1,h1,bindex,hindex))
@@ -633,7 +637,8 @@ def run_radial_profile(image, imagefile, sim_name):
 	"""
 
 if __name__ == "__main__":
-	sim_name=['RecalL0025N0752','']
+	sim_name=['RecalL0025N0752']
+	#sim_name='RecalL0025N0752'
 	imagefileRecalL0025N0752=['RecalL0025N0752galface_4938.png','']
 	#sim_name=['RecalL0025N0752', 'RefL0025N0376','RefL0050N0752']
 	#imagefileRecalL0025N0752=['RecalL0025N0752galface_646493.png','RecalL0025N0752galface_737885.png','RecalL0025N0752galface_746518.png','RecalL0025N0752galface_853401.png','RecalL0025N0752galface_4938.png','RecalL0025N0752galface_621500.png','RecalL0025N0752galface_726306.png','RecalL0025N0752galface_51604.png']
