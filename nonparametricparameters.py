@@ -143,6 +143,22 @@ def findassymetry(image):
     asymm=(np.sum(resid))/(np.sum(np.abs(image_arr)))
     return asymm
 
+def binnedasymmetry(image):
+    image_arr = np.array(image)
+    image_arr90 = np.rot90(image_arr)
+    image_arr180 = np.rot90(image_arr90)
+    image_arr270 = np.rot90(image_arr180)
+    resid1= np.abs(image_arr-image_arr90)
+    resid2= np.abs(image_arr-image_arr180)
+    resid3= np.abs(image_arr-image_arr270)
+    asymm1=(np.sum(resid1))/(np.sum(np.abs(image_arr)))
+    asymm2=(np.sum(resid2))/(np.sum(np.abs(image_arr)))
+    asymm3=(np.sum(resid3))/(np.sum(np.abs(image_arr)))
+    meanasymm=np.mean([asymm1,asymm2,asymm3])
+    asymmerror=np.std([asymm1,asymm2,asymm3])
+    return meanasymm, asymmerror
+
+
 def findclumpiness():
     return
 
@@ -158,7 +174,6 @@ def findpetrosianradius(rad, nr, r_arr, bhindex):
     petradbisect=optimize.bisect(petfunc, 0,np.sqrt(2)*15, args=(rad,nr, r_arr))
     petradnewton=optimize.newton(petfunc, bhindex, args=(rad,nr, r_arr))
     return petradbisect, petradnewton
-
 
 def runstatmorph(image):
     image2=np.average(image, axis=2, weights=[0.2126,0.587,0.114])
@@ -184,6 +199,10 @@ def runstatmorph(image):
 
 def run_radial_profile(image, imagefile, sim_name):
     image2=np.average(image, axis=2, weights=[0.2126,0.587,0.114])
+    meanasymm, asymmerror = binnedasymmetry(image2)
+    print(meanasymm, asymmerror)
+    exit()
+
     #plots radius vs pixel intensity and its log
     maxVal, center = findcenter(image)
     rad, stdbins, r_arr, nr=radial_profile(image,center)
@@ -223,8 +242,7 @@ def run_radial_profile(image, imagefile, sim_name):
 
     morph_c, morph_asymm, morph_sersic_n, morph_smoothness, morph_sersic_rhalf, morph_xc_asymmetry, morph_yc_asymmetry=runstatmorph(image)
 
-"""
-    
+    """
     print('xc_centroid = {}, statmorph:{}'.format(bcX, morph.xc_centroid))
     print('yc_centroid ={}, statmorph:{}'.format(bcY, morph.yc_centroid))
     print('r20 ={}, statmorph:{}'.format(r20, (morph.r20)*30/256))
@@ -264,7 +282,7 @@ def run_radial_profile(image, imagefile, sim_name):
     print('sky_mean =', morph.sky_mean)
     print('sky_median =', morph.sky_median)
     print('sky_sigma =', morph.sky_sigma)
-"""   
+    """
     print('con:{}, asymm:{}'.format(con, asymm))
     
 

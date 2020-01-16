@@ -1,32 +1,39 @@
 import numpy as np
+import pandas as pd
+import math
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D, axes3d
+from matplotlib import cm
+import matplotlib as mpl
+from matplotlib.collections import LineCollection
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+import matplotlib.colors as mcol
+import seaborn as sns
 from PIL import Image
 import cv2
 from imutils import contours
 from skimage import measure
 import imutils
-import math
-from scipy.optimize import curve_fit
-import pandas as pd
-import seaborn as sns
+import photutils
 from scipy import stats
-from mpl_toolkits.mplot3d import Axes3D
-from matplotlib import cm
-from mpl_toolkits.mplot3d import axes3d
+from scipy.optimize import curve_fit
+import scipy.ndimage as ndi
 from scipy.interpolate import griddata 
-from matplotlib.offsetbox import OffsetImage, AnnotationBbox
-from astropy.cosmology import Planck13
 import pylab
 import networkx as nx
-import matplotlib as mpl
+from astropy.cosmology import Planck13
 import statmorph
-import photutils
-import scipy.ndimage as ndi
+
+
+
 
 #sns.set_style('whitegrid')
 def logx(x):
     if x !=0:
-        return np.log10(x)
+        if x>0:
+            return np.log10(x)
+        if x<0:
+            return -np.log10(-x)
     else:
         return 0
 
@@ -374,6 +381,7 @@ def cleanandtransformdata(df):
     df.sort_values(['z','ProjGalaxyID'], ascending=[False,True], inplace=True)
     df['lbt']=df.apply(lambda x: -round(Planck13.lookback_time(x.z).value, 1), axis=1)
     df['lbt2']=df.apply(lambda x: round(Planck13.lookback_time(x.z).value, 1), axis=1)
+    df['zrounded']=df.apply(lambda x: np.round(x.z, decimals=1), axis=1)
 
     df['lookbacktime']=df.apply(lambda x: -(Planck13.lookback_time(x.z).value)*(1e9), axis=1)
     df['dlbt']=df.groupby('ProjGalaxyID')['lookbacktime'].diff()
@@ -384,6 +392,7 @@ def cleanandtransformdata(df):
     df['dn_total']=df.groupby('ProjGalaxyID')['n_total'].diff()
     df['dz']=df.groupby('ProjGalaxyID')['z'].diff()
     df['dz']=df.apply(lambda x: -x.dz, axis=1)
+
     """
     df['dSFRdz']=df.apply(lambda x: (x.dSFR)/(x.dz), axis=1)
     df['dBHmassdz']=df.apply(lambda x: (x.dBHmass)/(x.dz), axis=1)
@@ -396,6 +405,7 @@ def cleanandtransformdata(df):
     df['dn_totaldt']=df.apply(lambda x: (x.dn_total)/(x.dlbt), axis=1)
     df['dD2Tdt']=df.apply(lambda x: (x.dD2T)/(x.dlbt), axis=1)
     """
+
     #drop_numerical_outliers(df, 3)
     #df=df=df.reset_index()
     #print(df.shape)
@@ -426,6 +436,17 @@ def cleanandtransformdata(df):
     df=df.reset_index()
     print(df.shape)
     """
+    #df['zquantile']=pd.cut(df['z'], 8, labels=False)
+    df['massquantile']=pd.qcut(df['logmass'], 5, labels=False)
+    grouped=df[['zrounded','massquantile','sSFR']].groupby(['zrounded','massquantile']).agg({'sSFR':['median', 'std']})
+    grouped=grouped.xs('sSFR', axis=1, drop_level=True)
+    df=pd.merge(df, grouped, on=['zrounded','massquantile'], how='left')
+    df=df.rename({'median':'sSFR_median', 'std':'sSFR_std'}, axis=1)
+    df['sSFRpermass']=df.apply(lambda x: divide((x.sSFR-x.sSFR_median)*1e14, x.sSFR_std*1e12), axis=1)
+    print(df[['sSFRpermass']])
+    df['logsSFRpermass']=df.apply(lambda x: logx(x.sSFRpermass), axis=1)
+    print(df[['logsSFRpermass']])
+    return df
 
 def threeDplot(df, x,y,z, column_size, column_colour):
     df['BHmassbin']=pd.cut(df.logBHmass, 10)
@@ -834,11 +855,12 @@ def plotmergertree(df, galaxyid, colourparam):
 
 def plotmovinghistogram(df, histparam, binparam):
     #zmin=df.z.min()
-    df['zrounded']=df.apply(lambda x: np.round(x.z, decimals=1), axis=1)
+    
     z0df=df[df.zrounded==0.]
-    df=df[(df.zrounded==0.) | (df.zrounded==0.2) | (df.zrounded==0.5) | (df.zrounded==1.)]
+    df=df[(df.zrounded==0.) | (df.zrounded==0.1) | (df.zrounded==0.2) | (df.zrounded==0.5)]
     z0df=z0df[['ProjGalaxyID', binparam]]
     #z0df['marker_bin']=pd.qcut(z0df[binparam], 6, labels=['vlow','low','medlow','medhigh','high','vhigh'])
+    #z0df['marker_bin']=pd.qcut(z0df[binparam], 5, labels=['10','40','60','80','100'])
     z0df['marker_bin']=pd.qcut(z0df[binparam],10, labels=['10','20','30','40','50','60','70','80','90','100'])
     #z0df['marker_bin']=pd.qcut(z0df[binparam], [0.0, 0.05, 0.3,0.7,0.95,1.0], labels=['20','40','60','80','100'])
     df=pd.merge(df, z0df, on=['ProjGalaxyID'], how='left',  suffixes=('','_proj'))
@@ -848,7 +870,7 @@ def plotmovinghistogram(df, histparam, binparam):
     axs[0,0].set_title('0-10th percentile of '+binparam)
     axs[0,1].set_title('90-100th percentile of '+binparam)
     binedgs=np.linspace(df[histparam].min(), df[histparam].max(), 20)
-    for i,zi in enumerate([0., 0.2, 0.5, 1.]):
+    for i,zi in enumerate([0., 0.1, 0.2, 0.5]):
         #ax[i] = axs[i].twinx()
         zdf=df[df.zrounded==zi]
         lowdf=zdf[zdf.marker_bin=='10']
@@ -883,7 +905,83 @@ def plotmovinghistogram(df, histparam, binparam):
     plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/Histogramof'+histparam+'highlighted'+binparam+'.png')
     plt.show()
 
-def plotbulgedisctrans(df, maxz, param, thresh, threshstep):
+def plotbulgedisctransz(df, maxz, param, thresh, threshstep):
+    B2B =[]
+    D2D= []
+    B2D=[]
+    D2B=[]
+    BDB=[]
+    DBD=[]
+    df=df[df.z<maxz]
+    nmax=df.ProjGalaxyID.nunique()
+    for id in df.ProjGalaxyID.unique():
+        tempdf=df[df.ProjGalaxyID==id]
+        tempdf=tempdf.sort_values('z').reset_index()
+        if tempdf[param].min() > thresh-0.1:
+            B2B.append(id)
+        elif tempdf[param].max() < thresh+0.1:
+            D2D.append(id)
+        elif tempdf[param].iloc[tempdf.z.idxmax()]>thresh:
+            if tempdf[param].iloc[0] <thresh-(threshstep):
+                B2D.append(id)
+            else:
+                BDB.append(id)
+        elif tempdf[param].iloc[tempdf.z.idxmax()]<thresh:
+            if tempdf[param].iloc[0] >thresh+(threshstep):
+                D2B.append(id)
+            else:
+                DBD.append(id)
+    BDlist=[]
+    fig, ax =plt.subplots(2, 6, sharey='row', sharex='row', figsize=(12,6))
+    fig.suptitle('Time evolution'+param)
+    for id in B2B:
+        temp=df[df.ProjGalaxyID==id]
+        ax[1,0].plot(temp.z, temp[param], 'k', linewidth=0.2)
+    ax[1,0].plot([df.z.min(),df.z.max()], [thresh,thresh], 'r--', linewidth=1)
+    ax[0,0].bar(0,len(B2B), color='b')
+    ax[0,0].text(-.1, 1, str(round(100*len(B2B)/nmax, 1)) +'%', fontsize=12, color='white')
+    for id in D2D:
+        temp=df[df.ProjGalaxyID==id]
+        ax[1,1].plot(temp.z, temp[param], 'k', linewidth=0.2)
+    ax[1,1].plot([df.z.min(),df.z.max()], [thresh,thresh], 'r--', linewidth=1)
+    ax[0,1].bar(0,len(D2D), color='b')
+    ax[0,1].text(-.1, 1, ''+str(round(100*len(D2D)/nmax, 1))+'%', fontsize=12, color='white')
+    for id in B2D:
+        temp=df[df.ProjGalaxyID==id]
+        ax[1,2].plot(temp.z, temp[param], 'k', linewidth=0.2)
+    ax[1,2].plot([df.z.min(),df.z.max()], [thresh,thresh], 'r--', linewidth=1)
+    ax[0,2].bar(0,len(B2D), color='b')
+    ax[0,2].text(-.1, 1, str(round(100*len(B2D)/nmax, 1))+'%', fontsize=12, color='white')
+    for id in D2B:
+        temp=df[df.ProjGalaxyID==id]
+        ax[1,3].plot(temp.z, temp[param], 'k', linewidth=0.2)
+    ax[1,3].plot([df.z.min(),df.z.max()], [thresh,thresh], 'r--', linewidth=1)
+    ax[0,3].bar(0,len(D2B), color='b')
+    ax[0,3].text(-.1, 1, str(round(100*len(D2B)/nmax, 1))+'%', fontsize=12, color='white')
+    for id in BDB:
+        temp=df[df.ProjGalaxyID==id]
+        ax[1,4].plot(temp.z, temp[param], 'k', linewidth=0.2)
+    ax[1,4].plot([df.z.min(),df.z.max()], [thresh,thresh], 'r--', linewidth=1)
+    ax[0,4].bar(0,len(BDB), color='b')
+    ax[0,4].text(-.1, 1, str(round(100*len(BDB)/nmax, 1)) +'%', fontsize=12, color='white')
+    for id in DBD:
+        temp=df[df.ProjGalaxyID==id]
+        ax[1,5].plot(temp.z, temp[param], 'k', linewidth=0.2)
+    ax[1,5].plot([df.z.min(),df.z.max()], [thresh,thresh], 'r--', linewidth=1)
+    ax[0,5].bar(0,len(DBD), color='b')
+    ax[0,5].text(-.1, 1, str(round(100*len(DBD)/nmax, 1))+'%', fontsize=12, color='white')
+
+    ax[0,0].set_title('B'),ax[0,1].set_title('D'),ax[0,2].set_title('BD'),ax[0,3].set_title('DB'),ax[0,4].set_title('BDB'),ax[0,5].set_title('DBD')
+    ax[1,2].set_xlabel('z')
+    ax[1,0].set_ylabel(param)
+    ax[0,0].set_ylabel('count')
+
+    #ax[0,1].xticks(locs, labels),ax[0,2].xticks(locs, labels),ax[0,3].xticks(locs, labels),ax[0,4].xticks(locs, labels), ax[0,5].xticks(locs, labels)
+    plt.subplots_adjust(wspace=0.1, hspace=0)
+    plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/Evolution of'+str(param)+'thresh'+str(thresh)+'.png')
+    plt.show()
+
+def plotbulgedisctranscolour(df, maxz, param, colorparam, thresh, threshstep):
     B2B =[]
     D2D= []
     B2D=[]
@@ -895,57 +993,112 @@ def plotbulgedisctrans(df, maxz, param, thresh, threshstep):
     for id in df.ProjGalaxyID.unique():
         tempdf=df[df.ProjGalaxyID==id]
         tempdf=tempdf.sort_values('lbt').reset_index()
-        if tempdf[param].min() > thresh-threshstep:
+        if tempdf[param].min() > thresh-0.1:
             B2B.append(id)
-        elif tempdf[param].max() < thresh+threshstep:
+        elif tempdf[param].max() < thresh+0.1:
             D2D.append(id)
         elif tempdf[param].iloc[0]>thresh:
-            if tempdf[param].iloc[tempdf.lbt.idxmax()] <thresh-(threshstep/2):
+            if tempdf[param].iloc[tempdf.lbt.idxmax()] <thresh-(threshstep):
                 B2D.append(id)
             else:
                 BDB.append(id)
         elif tempdf[param].iloc[0]<thresh:
-            if tempdf[param].iloc[tempdf.lbt.idxmax()] >thresh+(threshstep/2):
+            if tempdf[param].iloc[tempdf.lbt.idxmax()] >thresh+(threshstep):
                 D2B.append(id)
             else:
                 DBD.append(id)
-    BDlist=[]
+    
     fig, ax =plt.subplots(2, 6, sharey='row', sharex='row', figsize=(12,6))
     fig.suptitle('Time evolution'+param)
+
+    #Cmap=plt.get_cmap('RdBu')
+    Cmap=mcol.LinearSegmentedColormap.from_list("cmop", ['tomato','cornflowerblue'])
+    Norm=plt.Normalize(df[colorparam].min(),df[colorparam].max())
+
     for id in B2B:
         temp=df[df.ProjGalaxyID==id]
-        ax[1,0].plot(temp.lbt, temp[param], 'k', linewidth=0.1)
-        ax[1,0].plot([temp.lbt.min(),temp.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
+        x=temp.lbt.values
+        y=temp[param].values
+        t=temp[colorparam].values
+        points=np.array([x,y]).T.reshape(-1,1,2)
+        segments=np.concatenate([points[:-1], points[1:]], axis=1)
+        lc=LineCollection(segments, cmap=Cmap, norm=Norm)
+        lc.set_array(t)
+        lc.set_linewidth(0.5)
+        ax[1,0].add_collection(lc)
+    #fig.colorbar(line, ax=ax[1,0])
+        #ax[1,0].plot(temp.lbt, temp[param], 'k', linewidth=0.2)
+    ax[1,0].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
     ax[0,0].bar(0,len(B2B), color='b')
     ax[0,0].text(-.1, 1, str(round(100*len(B2B)/nmax, 1)) +'%', fontsize=12, color='white')
     for id in D2D:
         temp=df[df.ProjGalaxyID==id]
-        ax[1,1].plot(temp.lbt, temp[param], 'k', linewidth=0.1)
-        ax[1,1].plot([temp.lbt.min(),temp.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
+        x=temp.lbt.values
+        y=temp[param].values
+        t=temp[colorparam].values
+        points=np.array([x,y]).T.reshape(-1,1,2)
+        segments=np.concatenate([points[:-1], points[1:]], axis=1)
+        lc=LineCollection(segments, cmap=Cmap, norm=Norm)
+        lc.set_array(t)
+        lc.set_linewidth(0.5)
+        ax[1,1].add_collection(lc)
+    ax[1,1].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
     ax[0,1].bar(0,len(D2D), color='b')
     ax[0,1].text(-.1, 1, ''+str(round(100*len(D2D)/nmax, 1))+'%', fontsize=12, color='white')
     for id in B2D:
         temp=df[df.ProjGalaxyID==id]
-        ax[1,2].plot(temp.lbt, temp[param], 'k', linewidth=0.1)
-        ax[1,2].plot([temp.lbt.min(),temp.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
+        x=temp.lbt.values
+        y=temp[param].values
+        t=temp[colorparam].values
+        points=np.array([x,y]).T.reshape(-1,1,2)
+        segments=np.concatenate([points[:-1], points[1:]], axis=1)
+        lc=LineCollection(segments, cmap=Cmap, norm=Norm)
+        lc.set_array(t)
+        lc.set_linewidth(0.5)
+        ax[1,2].add_collection(lc)
+    ax[1,2].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
     ax[0,2].bar(0,len(B2D), color='b')
     ax[0,2].text(-.1, 1, str(round(100*len(B2D)/nmax, 1))+'%', fontsize=12, color='white')
     for id in D2B:
         temp=df[df.ProjGalaxyID==id]
-        ax[1,3].plot(temp.lbt, temp[param], 'k', linewidth=0.1)
-        ax[1,3].plot([temp.lbt.min(),temp.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
+        x=temp.lbt.values
+        y=temp[param].values
+        t=temp[colorparam].values
+        points=np.array([x,y]).T.reshape(-1,1,2)
+        segments=np.concatenate([points[:-1], points[1:]], axis=1)
+        lc=LineCollection(segments, cmap=Cmap, norm=Norm)
+        lc.set_array(t)
+        lc.set_linewidth(0.5)
+        ax[1,3].add_collection(lc)
+    ax[1,3].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
     ax[0,3].bar(0,len(D2B), color='b')
-    ax[0,3].text(-.1, 10, str(round(100*len(D2B)/nmax, 1))+'%', fontsize=12, color='black')
+    ax[0,3].text(-.1, 1, str(round(100*len(D2B)/nmax, 1))+'%', fontsize=12, color='white')
     for id in BDB:
         temp=df[df.ProjGalaxyID==id]
-        ax[1,4].plot(temp.lbt, temp[param], 'k', linewidth=0.1)
-        ax[1,4].plot([temp.lbt.min(),temp.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
+        x=temp.lbt.values
+        y=temp[param].values
+        t=temp[colorparam].values
+        points=np.array([x,y]).T.reshape(-1,1,2)
+        segments=np.concatenate([points[:-1], points[1:]], axis=1)
+        lc=LineCollection(segments, cmap=Cmap, norm=Norm)
+        lc.set_array(t)
+        lc.set_linewidth(0.5)
+        ax[1,4].add_collection(lc)
+    ax[1,4].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
     ax[0,4].bar(0,len(BDB), color='b')
     ax[0,4].text(-.1, 1, str(round(100*len(BDB)/nmax, 1)) +'%', fontsize=12, color='white')
     for id in DBD:
         temp=df[df.ProjGalaxyID==id]
-        ax[1,5].plot(temp.lbt, temp[param], 'k', linewidth=0.1)
-        ax[1,5].plot([temp.lbt.min(),temp.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
+        x=temp.lbt.values
+        y=temp[param].values
+        t=temp[colorparam].values
+        points=np.array([x,y]).T.reshape(-1,1,2)
+        segments=np.concatenate([points[:-1], points[1:]], axis=1)
+        lc=LineCollection(segments, cmap=Cmap, norm=Norm)
+        lc.set_array(t)
+        lc.set_linewidth(0.5)
+        ax[1,5].add_collection(lc)
+    ax[1,5].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
     ax[0,5].bar(0,len(DBD), color='b')
     ax[0,5].text(-.1, 1, str(round(100*len(DBD)/nmax, 1))+'%', fontsize=12, color='white')
 
@@ -953,14 +1106,18 @@ def plotbulgedisctrans(df, maxz, param, thresh, threshstep):
     ax[1,2].set_xlabel('look back time (Gyr)')
     ax[1,0].set_ylabel(param)
     ax[0,0].set_ylabel('count')
+    ax[1,0].set_xlim(df.lbt.min(), df.lbt.max())
+    ax[1,0].set_ylim(df[param].min(), df[param].max())
     locs = ax[1,0].get_xticks()
-    print(locs)
-
     labels = [-item for item in locs]
     ax[1,0].set_xticklabels(labels)
     #ax[0,1].xticks(locs, labels),ax[0,2].xticks(locs, labels),ax[0,3].xticks(locs, labels),ax[0,4].xticks(locs, labels), ax[0,5].xticks(locs, labels)
-    plt.subplots_adjust(wspace=0.1, hspace=0)
-    plt.savefig('Evolution of'+str(param)+'thresh'+str(thresh)+'.png')
+    plt.subplots_adjust(right=0.8, wspace=0.1, hspace=0)
+    cbar_ax=fig.add_axes([0.85,0.15,0.05,0.7])
+    sm=plt.cm.ScalarMappable(cmap=Cmap, norm=Norm)
+    sm.set_array([])
+    cbar=plt.colorbar(sm, cax=cbar_ax).set_label(colorparam)
+    plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/Evolution of'+str(param)+'thresh'+str(thresh)+'zmax'+str(maxz)+'color.png')
     plt.show()
 
 def binvalue(df, paramx, paramy, binno):
@@ -984,9 +1141,9 @@ def binvalue(df, paramx, paramy, binno):
 def plotmovingquantiles(df, paramx, paramy, binparam):
     df['zrounded']=df.apply(lambda x: np.round(x.z, decimals=1), axis=1)
     z0df=df[df.zrounded==0.]
-    df=df[(df.zrounded==0.) | (df.zrounded==0.2) | (df.zrounded==0.5) | (df.zrounded==1.)]
+    df=df[(df.zrounded==0.) | (df.zrounded==0.1) | (df.zrounded==0.2) | (df.zrounded==0.5)]
     z0df=z0df[['ProjGalaxyID', binparam]]
-    #z0df['marker_bin']=pd.qcut(z0df[binparam], 5, labels=['20','40','60','80','100'])
+    #z0df['marker_bin']=pd.qcut(z0df[binparam], 5, labels=['10','40','60','80','100'])
     z0df['marker_bin']=pd.qcut(z0df[binparam], 20, labels=['10','20','30','1','2','3','4','5','6','7','8','9','11','40','50','60','70','80','90','100'])
     df=pd.merge(df, z0df, on=['ProjGalaxyID'], how='left',  suffixes=('','_proj'))
     
@@ -994,7 +1151,7 @@ def plotmovingquantiles(df, paramx, paramy, binparam):
     fig.suptitle('Time evolution of '+paramx+paramy+' showing distribution of '+binparam)
     axs[0,0].set_title('10th percentile of '+binparam)
     axs[0,1].set_title('90th percentile of '+binparam)
-    for i,zi in enumerate([0., 0.2, 0.5, 1.]):
+    for i,zi in enumerate([0., 0.1, 0.2, 0.5]):
         #ax[i] = axs[i].twinx()
         zdf=df[df.zrounded==zi]
         medianvals, binedgs, lowquart, highquart=binvalue(zdf, paramx, paramy, 20)
@@ -1008,8 +1165,8 @@ def plotmovingquantiles(df, paramx, paramy, binparam):
         axs[i,1].plot(binedgs, lowquart,"k--")
         axs[i,1].plot(binedgs, highquart,"k--")
         axs[i,1].fill_between(binedgs, lowquart, highquart, color='grey', alpha=0.4)
-        axs[i,0].scatter(lowdf[paramx], lowdf[paramy],color="r", alpha=0.5)
-        axs[i,1].scatter(highdf[paramx], highdf[paramy],color="b", alpha=0.5)
+        axs[i,0].scatter(lowdf[paramx], lowdf[paramy],color="b", alpha=0.5)
+        axs[i,1].scatter(highdf[paramx], highdf[paramy],color="r", alpha=0.5)
 
         axs[i,0].set_xlabel('')
         axs[i,1].set_xlabel('')
@@ -1023,15 +1180,39 @@ def plotmovingquantiles(df, paramx, paramy, binparam):
     plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/Plotof'+paramx+paramy+'highlighted'+binparam+'.png')
     plt.show()
 
-
 def plotbulgetodisc(df, sim_name):
-    cleanandtransformdata(df)
-    df=df[df.sSFR>0]
+    df=df[df.n_total>0.5]
     
-    plotmovingquantiles(df, 'logmass', 'logsSFR', 'asymm')
+    df=df[df.z<2]
+    df=cleanandtransformdata(df)
+    df=df[df.sSFR>0]
+    df=df[['z','lbt','sSFR','DiscToTotal', 'BulgeToTotal','n_total','logmass', 'logBHmass', 'asymm', 'ProjGalaxyID', 'logsSFR', 'sSFRpermass', 'logsSFRpermass']]
+    #plotbulgedisctranscolour(df,1,'n_total','sSFRpermass',1.6,0.1 )
+    plotbulgedisctranscolour(df,0.6,'n_total','logsSFRpermass',1.5,0.1 )
+    #plotbulgedisctranscolour(df,1,'BulgeToTotal','sSFRpermass',0.6,0.1 )
+    #plotbulgedisctranscolour(df,0.6,'BulgeToTotal','logsSFRpermass',0.5,0.1 )
+    #plotmovingquantiles(df, 'logmass', 'logsSFR', 'logsSFRpermass')
     exit()
-    plotbulgedisctrans(df,2,'BulgeToTotal',0.6,0.1 )
+
+    plotmovingquantiles(df, 'logmass', 'logsSFR', 'n_total')
+    plotmovingquantiles(df, 'logBHmass', 'logsSFR', 'n_total')
+    plotmovingquantiles(df, 'logmass', 'logBHmass', 'n_total')
+
+    plotmovingquantiles(df, 'logmass', 'logsSFR', 'asymm')
+    plotmovingquantiles(df, 'logBHmass', 'logsSFR', 'asymm')
+    plotmovingquantiles(df, 'logmass', 'logBHmass', 'asymm')
+    
+    plotbulgedisctrans(df,1,'n_total',1.6,0.1 )
+    #plotbulgedisctrans(df,3,'n_total',1.6,0.1 )
+    
     plotmovinghistogram(df, 'logsSFR', 'asymm')
+    exit()
+    
+    exit()
+    
+    exit()
+    
+    
     exit()
 
 
