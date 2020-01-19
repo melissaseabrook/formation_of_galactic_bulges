@@ -102,12 +102,12 @@ def findandlabelbulge(image, imagefile, sim_name):
     std=np.std(image)
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     blurred1 = cv2.GaussianBlur(gray, ksize=(7, 7), sigmaX=3,sigmaY=3)
-    thresh1 = cv2.threshold(blurred1, median + 5*std, 255, cv2.THRESH_BINARY)[1]
+    thresh1 = cv2.threshold(blurred1, median + 5.5*std, 255, cv2.THRESH_BINARY)[1]
     thresh1 = cv2.erode(thresh1, None, iterations=2)
     thresh1 = cv2.dilate(thresh1, None, iterations=4)
 
     blurred2 = cv2.GaussianBlur(gray, ksize=(15, 15), sigmaX=3,sigmaY=3)
-    thresh2 = cv2.threshold(blurred2, median +std, 255, cv2.THRESH_BINARY)[1]
+    thresh2 = cv2.threshold(blurred2, median +1.5*std, 255, cv2.THRESH_BINARY)[1]
     thresh2 = cv2.dilate(thresh2, None, iterations=4)
 
     #blurred3 = cv2.GaussianBlur(gray, ksize=(11, 11), sigmaX=2,sigmaY=2)
@@ -422,6 +422,7 @@ def cleanandtransformdata(df):
     df['sSFR']=df.apply(lambda x: divide(x.SFR,x.Starmass), axis=1)
     df['logSFR']=df.apply(lambda x: logx(x.SFR), axis=1)
     df['logsSFR']=df.apply(lambda x: logx(x.sSFR), axis=1)
+    df['logDMmass']=df.apply(lambda x: logx(x.DMmass), axis=1)
     df['dtototal']=df.apply(lambda x: (1-x.btdintensity), axis=1)
     df['dtbradius']=df.apply(lambda x: invertbtd(x.btdradius), axis=1)
     df['dtbintensity']=df.apply(lambda x: invertbtd(x.btdintensity), axis=1)
@@ -1147,7 +1148,7 @@ def plotmovingquantiles(df, paramx, paramy, binparam):
     z0df['marker_bin']=pd.qcut(z0df[binparam], 20, labels=['10','20','30','1','2','3','4','5','6','7','8','9','11','40','50','60','70','80','90','100'])
     df=pd.merge(df, z0df, on=['ProjGalaxyID'], how='left',  suffixes=('','_proj'))
     
-    fig, axs =plt.subplots(4, 2, sharex=True, sharey='col', figsize=(9,6))
+    fig, axs =plt.subplots(4, 2, sharex=True, sharey=True, figsize=(9,6))
     fig.suptitle('Time evolution of '+paramx+paramy+' showing distribution of '+binparam)
     axs[0,0].set_title('10th percentile of '+binparam)
     axs[0,1].set_title('90th percentile of '+binparam)
@@ -1180,21 +1181,52 @@ def plotmovingquantiles(df, paramx, paramy, binparam):
     plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/Plotof'+paramx+paramy+'highlighted'+binparam+'.png')
     plt.show()
 
+def plotmovingquantilesdemo(df, paramx, paramy, binparam):
+    df['zrounded']=df.apply(lambda x: np.round(x.z, decimals=1), axis=1)
+    z0df=df[df.zrounded==0.]
+    df=df[(df.zrounded==0.) | (df.zrounded==0.1) | (df.zrounded==0.2) | (df.zrounded==0.5)]
+    z0df=z0df[['ProjGalaxyID', binparam]]
+    df['normisedcolor']=df.apply(lambda x: x.logsSFRpermass+np.abs(df.logsSFRpermass.min())/(df.logsSFRpermass.max()+np.abs(df.logsSFRpermass.min())), axis=1)
+    fig, axs =plt.subplots(4, 1, sharex=True, sharey='col', figsize=(9,6))
+    fig.suptitle('Time evolution of '+paramx+paramy+' showing distribution of sSFR per mass bin')
+    Cmap=mcol.LinearSegmentedColormap.from_list("cmop", ['tomato','cornflowerblue'])
+    Norm=plt.Normalize(df['logsSFRpermass'].min(),df['logsSFRpermass'].max())
+    for i,zi in enumerate([0., 0.1, 0.2, 0.5]):
+        #ax[i] = axs[i].twinx()
+        zdf=df[df.zrounded==zi]
+        medianvals, binedgs, lowquart, highquart=binvalue(zdf, paramx, paramy, 20)
+        axs[i].plot(binedgs, medianvals,color="k", label='z='+str(zi))
+        axs[i].plot(binedgs, lowquart,"k--")
+        axs[i].plot(binedgs, highquart,"k--")
+        axs[i].fill_between(binedgs, lowquart, highquart, color='grey', alpha=0.4)
+        axs[i].scatter(zdf[paramx], zdf[paramy],c=zdf.normisedcolor.values, alpha=0.5, cmap=Cmap)
+        axs[i].set_xlabel('')
+        axs[i].set_ylabel(paramy)
+        axs[i].legend()
+        
+    axs[3].set_xlabel(paramx)
+    plt.subplots_adjust(right=0.8,hspace=0)
+    cbar_ax=fig.add_axes([0.85,0.15,0.05,0.7])
+    sm=plt.cm.ScalarMappable(cmap=Cmap, norm=Norm)
+    sm.set_array([])
+    cbar=plt.colorbar(sm, cax=cbar_ax).set_label('logsSFRpermass')
+    plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/Plotof'+paramx+paramy+'showingsSFRpermassbin.png')
+    plt.show()
+
 def plotbulgetodisc(df, sim_name):
     df=df[df.n_total>0.5]
-    
+    print(df.info())
     df=df[df.z<2]
     df=cleanandtransformdata(df)
     df=df[df.sSFR>0]
-    df=df[['z','lbt','sSFR','DiscToTotal', 'BulgeToTotal','n_total','logmass', 'logBHmass', 'asymm', 'ProjGalaxyID', 'logsSFR', 'sSFRpermass', 'logsSFRpermass']]
-    #plotbulgedisctranscolour(df,1,'n_total','sSFRpermass',1.6,0.1 )
-    plotbulgedisctranscolour(df,0.6,'n_total','logsSFRpermass',1.5,0.1 )
-    #plotbulgedisctranscolour(df,1,'BulgeToTotal','sSFRpermass',0.6,0.1 )
-    #plotbulgedisctranscolour(df,0.6,'BulgeToTotal','logsSFRpermass',0.5,0.1 )
-    #plotmovingquantiles(df, 'logmass', 'logsSFR', 'logsSFRpermass')
+    df=df[['z','lbt','sSFR','DiscToTotal', 'BulgeToTotal','n_total','logmass', 'logBHmass', 'asymm', 'ProjGalaxyID', 'logsSFR', 'sSFRpermass', 'logsSFRpermass', 'logDMmass']]
+    #plotbulgedisctranscolour(df,0.6,'n_total','logsSFRpermass',1.5,0.1 )
+    plotmovingquantiles(df, 'logmass', 'logsSFR', 'n_total')
+    plotmovingquantiles(df, 'logmass', 'logBHmass', 'n_total')
+    plotmovingquantiles(df, 'logmass', 'logDMmass', 'n_total')
     exit()
 
-    plotmovingquantiles(df, 'logmass', 'logsSFR', 'n_total')
+    
     plotmovingquantiles(df, 'logBHmass', 'logsSFR', 'n_total')
     plotmovingquantiles(df, 'logmass', 'logBHmass', 'n_total')
 
@@ -1287,7 +1319,7 @@ if __name__ == "__main__":
     #query_type=mainbranch or allbranches
     for sim_name in sim_names:
         query_type='mainbranch'
-        read_data=True
+        read_data=False
         if(read_data):
             print('........reading.......')
             df=pd.read_csv('evolvingEAGLEbulgedisc'+query_type+'df'+sim_name+'.csv')

@@ -38,7 +38,7 @@ def getdata(mySims, querytype):
                     SH.HalfMassRad_Star as HalfMassRadius, \
                     AP.Mass_Star as Starmass, \
                     AP.Mass_BH as BHmass, \
-                    AP.Mass_DM as DMmass, \
+                    SH.MassType_DM as DMmass, \
                     AP.SFR as SFR, \
                     SH.StellarInitialMass as StellarInitialMass, \
                     SH.BlackHoleMassAccretionRate as BHAccretionrate, \
@@ -52,9 +52,9 @@ def getdata(mySims, querytype):
                     %s_Aperture as AP, \
                     %s_MorphoKinem as MK \
                 WHERE \
-                    ref.MassType_Star between 1.0e10 and 1.0e11 and \
+                    ref.MassType_Star between 1.0e10 and 5.0e11 and \
                     ref.StarFormationRate between 0.1 and 15 and \
-                    ref.MassType_BH between 1.0e6 and 5.0e7 and \
+                    ref.MassType_BH between 1.0e6 and 1.0e8 and \
                     ref.SnapNum=28 and \
                     ((SH.SnapNum > ref.SnapNum and ref.GalaxyID between SH.GalaxyID and SH.TopLeafID) or (SH.SnapNum <= ref.SnapNum and SH.GalaxyID between ref.GalaxyID and ref.TopLeafID)) and \
                     SH.GalaxyID = AP.GalaxyID and \
@@ -118,7 +118,7 @@ def getdata(mySims, querytype):
 if __name__ == "__main__":
     mySims = np.array(['RefL0050N0752'])
     #querytype = allbranches or mainbranch
-    querytype= 'allbranches'
+    querytype= 'mainbranch'
     getdata(mySims, querytype)
     
 
