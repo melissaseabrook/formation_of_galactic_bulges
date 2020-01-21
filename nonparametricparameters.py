@@ -287,10 +287,10 @@ def run_radial_profile(image, imagefile, sim_name):
     
 
 if __name__ == "__main__":
-    #sim_name=['RecalL0025N0752','']
+    sim_name=['RecalL0025N0752','']
     #imagefileRecalL0025N0752=['RecalL0025N0752galface_726306.png','']
     sim_name=['RecalL0025N0752', 'RefL0025N0376','RefL0050N0752']
-    imagefileRecalL0025N0752=['RecalL0025N0752galface_646493.png','RecalL0025N0752galface_737885.png','RecalL0025N0752galface_746518.png','RecalL0025N0752galface_853401.png','RecalL0025N0752galface_4938.png','RecalL0025N0752galface_621500.png','RecalL0025N0752galface_726306.png','RecalL0025N0752galface_51604.png']
+    imagefileRecalL0025N0752=['RecalL0025N0752galface_770934.png','RecalL0025N0752galface_737885.png','RecalL0025N0752galface_746518.png','RecalL0025N0752galface_853401.png','RecalL0025N0752galface_4938.png','RecalL0025N0752galface_621500.png','RecalL0025N0752galface_726306.png','RecalL0025N0752galface_51604.png']
     imagefileRefL0025N0376=['RefL0025N0376galface_1.png','RefL0025N0376galface_135107.png','RefL0025N0376galface_154514.png','RefL0025N0376galface_160979.png','RefL0025N0376galface_172979.png']
     imagefileRefL0050N0752=['RefL0050N0752galface_2273534.png','RefL0050N0752galface_2276263.png','RefL0050N0752galface_514258.png','RefL0050N0752galface_2355640.png','RefL0050N0752galface_2639531.png']
 

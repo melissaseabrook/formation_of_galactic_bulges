@@ -546,9 +546,35 @@ def vary_radial_bins(image, imagefile, sim_name):
 		bhindex=int((bindex+hindex)/2)
 		n1, pcov1, poptdisca, pcovdisca, poptbulgea, pcovbulgea, poptdisc, pcovdisc,  poptbulge, pcovbulge, isolated_discsima, isolated_bulgea, isolated_bulgesima, totalsima, isolated_discsim, isolated_bulge, isolated_bulgesim, totalsim, i_ebulge, r_ebulge, i_ebulgea, r_ebulgea = calculateSersicIndices(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, nr, sim_name, imagefile, sigma_bulge, sigma_disc, bintype)
 
+def findassymetry(image):
+    image_arr = np.array(image)
+    image_arr90 = np.rot90(image_arr)
+    image_arr180 = np.rot90(image_arr90)
+    resid= np.abs(image_arr-image_arr180)
+    asymm=(np.sum(resid))/(np.sum(np.abs(image_arr)))
+    return asymm
+
+def binnedasymmetry(image):
+    image_arr = np.array(image)
+    image_arr90 = np.rot90(image_arr)
+    image_arr180 = np.rot90(image_arr90)
+    image_arr270 = np.rot90(image_arr180)
+    resid1= np.abs(image_arr-image_arr90)
+    resid2= np.abs(image_arr-image_arr180)
+    resid3= np.abs(image_arr-image_arr270)
+    asymm1=(np.sum(resid1))/(np.sum(np.abs(image_arr)))
+    asymm2=(np.sum(resid2))/(np.sum(np.abs(image_arr)))
+    asymm3=(np.sum(resid3))/(np.sum(np.abs(image_arr)))
+    meanasymm=np.mean([asymm1,asymm2,asymm3])
+    asymmerror=np.std([asymm1,asymm2,asymm3])
+    return meanasymm, asymmerror
+
 def run_radial_profile(image, imagefile, sim_name):
 	#vary_radial_bins(image, imagefile, sim_name)
 	#vary_sigma(image, imagefile, sim_name)
+	asymm = findassymetry(image)
+	meanasymm, asymmerror=binnedasymmetry(image)
+
 	radbintype='equalradius'
 	#plots radius vs pixel intensity and its log
 	maxVal, center = findcenter(image)
@@ -564,7 +590,6 @@ def run_radial_profile(image, imagefile, sim_name):
 	r=r[1:int(hindex)]
 	rad=rad[1:int(hindex)]
 	stdbins=stdbins[1:int(hindex)]
-	std
 	#r= np.linspace(1/256, hindex/256, num=len(rad))
 	b1=bindex*30/256
 	h1=hindex*30/256
@@ -574,7 +599,7 @@ def run_radial_profile(image, imagefile, sim_name):
 	n1, pcov1, poptdisca, pcovdisca, poptbulgea, pcovbulgea, poptdisc, pcovdisc,  poptbulge, pcovbulge, isolated_discsima, isolated_bulgea, isolated_bulgesima, totalsima, isolated_discsim, isolated_bulge, isolated_bulgesim, totalsim, i_ebulge, r_ebulge, i_ebulgea, r_ebulgea = calculateSersicIndices(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, nr, sim_name, imagefile, sigma_bulge, sigma_disc, radbintype)
 	plotchisquared(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, i_ebulge,r_ebulge,isolated_bulge, nr, sim_name)
 	
-	exit()
+
 	
 	
 	"""
