@@ -9,6 +9,7 @@ from matplotlib.collections import LineCollection
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import matplotlib.colors as mcol
 import seaborn as sns
+import pygtc
 from PIL import Image
 import cv2
 from imutils import contours
@@ -994,9 +995,9 @@ def plotbulgedisctranscolour(df, maxz, param, colorparam, thresh, threshstep):
     for id in df.ProjGalaxyID.unique():
         tempdf=df[df.ProjGalaxyID==id]
         tempdf=tempdf.sort_values('lbt').reset_index()
-        if tempdf[param].min() > thresh-0.1:
+        if tempdf[param].min() > thresh-threshstep:
             B2B.append(id)
-        elif tempdf[param].max() < thresh+0.1:
+        elif tempdf[param].max() < thresh+threshstep:
             D2D.append(id)
         elif tempdf[param].iloc[0]>thresh:
             if tempdf[param].iloc[tempdf.lbt.idxmax()] <thresh-(threshstep):
@@ -1030,7 +1031,7 @@ def plotbulgedisctranscolour(df, maxz, param, colorparam, thresh, threshstep):
     #fig.colorbar(line, ax=ax[1,0])
         #ax[1,0].plot(temp.lbt, temp[param], 'k', linewidth=0.2)
     ax[1,0].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
-    ax[0,0].bar(0,len(B2B), color='b')
+    ax[0,0].bar(0,len(B2B), color='purple')
     ax[0,0].text(-.1, 1, str(round(100*len(B2B)/nmax, 1)) +'%', fontsize=12, color='white')
     for id in D2D:
         temp=df[df.ProjGalaxyID==id]
@@ -1044,7 +1045,7 @@ def plotbulgedisctranscolour(df, maxz, param, colorparam, thresh, threshstep):
         lc.set_linewidth(0.5)
         ax[1,1].add_collection(lc)
     ax[1,1].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
-    ax[0,1].bar(0,len(D2D), color='b')
+    ax[0,1].bar(0,len(D2D), color='purple')
     ax[0,1].text(-.1, 1, ''+str(round(100*len(D2D)/nmax, 1))+'%', fontsize=12, color='white')
     for id in B2D:
         temp=df[df.ProjGalaxyID==id]
@@ -1058,7 +1059,7 @@ def plotbulgedisctranscolour(df, maxz, param, colorparam, thresh, threshstep):
         lc.set_linewidth(0.5)
         ax[1,2].add_collection(lc)
     ax[1,2].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
-    ax[0,2].bar(0,len(B2D), color='b')
+    ax[0,2].bar(0,len(B2D), color='purple')
     ax[0,2].text(-.1, 1, str(round(100*len(B2D)/nmax, 1))+'%', fontsize=12, color='white')
     for id in D2B:
         temp=df[df.ProjGalaxyID==id]
@@ -1072,7 +1073,7 @@ def plotbulgedisctranscolour(df, maxz, param, colorparam, thresh, threshstep):
         lc.set_linewidth(0.5)
         ax[1,3].add_collection(lc)
     ax[1,3].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
-    ax[0,3].bar(0,len(D2B), color='b')
+    ax[0,3].bar(0,len(D2B), color='purple')
     ax[0,3].text(-.1, 1, str(round(100*len(D2B)/nmax, 1))+'%', fontsize=12, color='white')
     for id in BDB:
         temp=df[df.ProjGalaxyID==id]
@@ -1086,7 +1087,7 @@ def plotbulgedisctranscolour(df, maxz, param, colorparam, thresh, threshstep):
         lc.set_linewidth(0.5)
         ax[1,4].add_collection(lc)
     ax[1,4].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
-    ax[0,4].bar(0,len(BDB), color='b')
+    ax[0,4].bar(0,len(BDB), color='purple')
     ax[0,4].text(-.1, 1, str(round(100*len(BDB)/nmax, 1)) +'%', fontsize=12, color='white')
     for id in DBD:
         temp=df[df.ProjGalaxyID==id]
@@ -1100,8 +1101,8 @@ def plotbulgedisctranscolour(df, maxz, param, colorparam, thresh, threshstep):
         lc.set_linewidth(0.5)
         ax[1,5].add_collection(lc)
     ax[1,5].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
-    ax[0,5].bar(0,len(DBD), color='b')
-    ax[0,5].text(-.1, 1, str(round(100*len(DBD)/nmax, 1))+'%', fontsize=12, color='white')
+    ax[0,5].bar(0,len(DBD), color='purple')
+    ax[0,5].text(-.1, 10, str(round(100*len(DBD)/nmax, 1))+'%', fontsize=12, color='k')
 
     ax[0,0].set_title('B'),ax[0,1].set_title('D'),ax[0,2].set_title('BD'),ax[0,3].set_title('DB'),ax[0,4].set_title('BDB'),ax[0,5].set_title('DBD')
     ax[1,2].set_xlabel('look back time (Gyr)')
@@ -1141,6 +1142,7 @@ def binvalue(df, paramx, paramy, binno):
 
 def plotmovingquantiles(df, paramx, paramy, binparam):
     df['zrounded']=df.apply(lambda x: np.round(x.z, decimals=1), axis=1)
+    #plt.hist(df.zrounded)
     z0df=df[df.zrounded==0.]
     df=df[(df.zrounded==0.) | (df.zrounded==0.1) | (df.zrounded==0.2) | (df.zrounded==0.5)]
     z0df=z0df[['ProjGalaxyID', binparam]]
@@ -1213,17 +1215,29 @@ def plotmovingquantilesdemo(df, paramx, paramy, binparam):
     plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/Plotof'+paramx+paramy+'showingsSFRpermassbin.png')
     plt.show()
 
+def plotmultivariateplot(df):
+    names=['DiscToTotal', 'n_total', 'asymm','logsSFR','logmass', 'logBHmass', 'logDMmass']
+    df=df[names]
+    GTC = pygtc.plotGTC(df, paramNames=names)
+    plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/GTCplot.png')
+    plt.show()
+
 def plotbulgetodisc(df, sim_name):
-    df=df[df.n_total>0.5]
+    df=df[df.n_total>0.4]
+    df=df[df.asymm>0]
+    df=cleanandtransformdata(df)
     print(df.info())
     df=df[df.z<2]
-    df=cleanandtransformdata(df)
-    df=df[df.sSFR>0]
+    #df=cleanandtransformdata(df)
+    #df=df[df.sSFR>0]
+    plotmultivariateplot(df)
+    exit()
     df=df[['z','lbt','sSFR','DiscToTotal', 'BulgeToTotal','n_total','logmass', 'logBHmass', 'asymm', 'ProjGalaxyID', 'logsSFR', 'sSFRpermass', 'logsSFRpermass', 'logDMmass']]
-    #plotbulgedisctranscolour(df,0.6,'n_total','logsSFRpermass',1.5,0.1 )
-    plotmovingquantiles(df, 'logmass', 'logsSFR', 'n_total')
-    plotmovingquantiles(df, 'logmass', 'logBHmass', 'n_total')
-    plotmovingquantiles(df, 'logmass', 'logDMmass', 'n_total')
+    plotbulgedisctranscolour(df,0.6,'asymm','logsSFRpermass',0.25,0.05)
+    #plotbulgedisctranscolour(df,0.6,'n_total','logsSFRpermass',1.5,0.1)
+    #plotmovingquantiles(df, 'logmass', 'logsSFR', 'n_total')
+    #plotmovingquantiles(df, 'logmass', 'logBHmass', 'n_total')
+    #plotmovingquantiles(df, 'logmass', 'logDMmass', 'n_total')
     exit()
 
     
@@ -1319,7 +1333,7 @@ if __name__ == "__main__":
     #query_type=mainbranch or allbranches
     for sim_name in sim_names:
         query_type='mainbranch'
-        read_data=False
+        read_data=True
         if(read_data):
             print('........reading.......')
             df=pd.read_csv('evolvingEAGLEbulgedisc'+query_type+'df'+sim_name+'.csv')
