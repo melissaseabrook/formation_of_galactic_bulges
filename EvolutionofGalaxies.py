@@ -377,6 +377,14 @@ def removeoutlierscolumn(df, column_name, sigma):
 def getImage(path):
     return OffsetImage(plt.imread('evolvinggalaxyimagebinmainbranch'+sim_name+'/'+path), zoom=0.15)
 
+def categorise(asymm, param, thresh):
+    if asymm > 0.35:
+        return 'A'
+    elif param > thresh:
+        return 'B'
+    else:
+        return 'D'
+
 def cleanandtransformdata(df):
     print(df.shape)
     df.sort_values(['z','ProjGalaxyID'], ascending=[False,True], inplace=True)
@@ -414,7 +422,6 @@ def cleanandtransformdata(df):
     df['num']= df.groupby('ProjGalaxyID')['ProjGalaxyID'].transform('count')
     print(df.shape)
     #df=df[df.num>7]
-    #dftotal work
     print(df.ProjGalaxyID.nunique())
     df['BulgeToTotal']=df.apply(lambda x: (1-x.DiscToTotal), axis=1)
     df['logBHmass']=df.apply(lambda x: logx(x.BHmass), axis=1)
@@ -428,7 +435,9 @@ def cleanandtransformdata(df):
     df['dtbradius']=df.apply(lambda x: invertbtd(x.btdradius), axis=1)
     df['dtbintensity']=df.apply(lambda x: invertbtd(x.btdintensity), axis=1)
 
-    
+    df['categoryn']=df.apply(lambda x: categorise(x.asymm, x.n_total, 1.5), axis=1)
+    df['categorybt']=df.apply(lambda x: categorise(x.asymm, x.BulgeToTotal, 0.5), axis=1)
+
     """
     dftotal=df
     df=df[df.n_total_error<100]
@@ -445,9 +454,34 @@ def cleanandtransformdata(df):
     df=pd.merge(df, grouped, on=['zrounded','massquantile'], how='left')
     df=df.rename({'median':'sSFR_median', 'std':'sSFR_std'}, axis=1)
     df['sSFRpermass']=df.apply(lambda x: divide((x.sSFR-x.sSFR_median)*1e14, x.sSFR_std*1e12), axis=1)
-    print(df[['sSFRpermass']])
     df['logsSFRpermass']=df.apply(lambda x: logx(x.sSFRpermass), axis=1)
-    print(df[['logsSFRpermass']])
+
+
+    df['roundlogmass']=df.apply(lambda x: (np.round(x.logmass*2, decimals=1)/2), axis=1)
+    df['roundlogmass2']=df.apply(lambda x: (np.round(x.logmass*5, decimals=1)/5), axis=1)
+    df['counts']=df.groupby(['zrounded', 'roundlogmass'])['ProjGalaxyID'].transform('count')
+    df['frac']=df.apply(lambda x: 1/x.counts, axis=1)
+    df['catcounts']=df.groupby(['zrounded','categoryn', 'roundlogmass'])['ProjGalaxyID'].transform('size')
+    df['catfrac']=df.apply(lambda x: x.catcounts/x.counts, axis=1)
+
+    df['roundsSFR2']=df.apply(lambda x: (np.round(x.logsSFR*2, decimals=1)/2), axis=1)
+    df['roundsSFR']=df.apply(lambda x: (np.round(x.logsSFR, decimals=1)), axis=1)
+    df['sfrcounts']=df.groupby(['zrounded', 'roundsSFR'])['ProjGalaxyID'].transform('size')
+    df['catsfrcounts']=df.groupby(['zrounded','categoryn', 'roundsSFR'])['ProjGalaxyID'].transform('size')
+    df['catsfrfrac']=df.apply(lambda x: x.catsfrcounts/x.sfrcounts, axis=1)
+
+    df['roundBHmass2']=df.apply(lambda x: (np.round(x.logBHmass*5, decimals=1)/5), axis=1)
+    df['roundBHmass']=df.apply(lambda x: (np.round(x.logBHmass*2, decimals=1)/2), axis=1)
+    df['BHcounts']=df.groupby(['zrounded', 'roundBHmass'])['ProjGalaxyID'].transform('size')
+    df['catBHcounts']=df.groupby(['zrounded','categoryn', 'roundBHmass'])['ProjGalaxyID'].transform('size')
+    df['catBHfrac']=df.apply(lambda x: x.catBHcounts/x.BHcounts, axis=1)
+
+    df['roundDMmass2']=df.apply(lambda x: (np.round(x.logDMmass*2, decimals=1)/2), axis=1)
+    df['roundDMmass']=df.apply(lambda x: (np.round(x.logDMmass, decimals=1)), axis=1)
+    df['DMcounts']=df.groupby(['zrounded', 'roundDMmass'])['ProjGalaxyID'].transform('size')
+    df['catDMcounts']=df.groupby(['zrounded','categoryn', 'roundDMmass'])['ProjGalaxyID'].transform('size')
+    df['catDMfrac']=df.apply(lambda x: x.catDMcounts/x.DMcounts, axis=1)
+
     return df
 
 def threeDplot(df, x,y,z, column_size, column_colour):
@@ -1115,7 +1149,7 @@ def plotbulgedisctranscolour(df, maxz, param, colorparam, thresh, threshstep):
     ax[1,0].set_xticklabels(labels)
     #ax[0,1].xticks(locs, labels),ax[0,2].xticks(locs, labels),ax[0,3].xticks(locs, labels),ax[0,4].xticks(locs, labels), ax[0,5].xticks(locs, labels)
     plt.subplots_adjust(right=0.8, wspace=0.1, hspace=0)
-    cbar_ax=fig.add_axes([0.85,0.15,0.05,0.7])
+    cbar_ax=fig.add_axes([0.1,0.15,0.05,0.7])
     sm=plt.cm.ScalarMappable(cmap=Cmap, norm=Norm)
     sm.set_array([])
     cbar=plt.colorbar(sm, cax=cbar_ax).set_label(colorparam)
@@ -1222,12 +1256,90 @@ def plotmultivariateplot(df):
     plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/GTCplot.png')
     plt.show()
 
+def categorybarchart(df, cat):
+    zlist=[]
+    alist=[]
+    blist=[]
+    dlist=[]
+    for i in df.zrounded.unique():
+        tempdf=df[df.zrounded==i]
+        Anum=len(tempdf[tempdf[cat]=='A'])
+        Bnum=len(tempdf[tempdf[cat]=='B'])
+        Dnum=len(tempdf[tempdf[cat]=='D'])
+        zlist.append(i)
+        alist.append(Anum)
+        blist.append(Bnum)
+        dlist.append(Dnum)
+    zarr=np.array(zlist)
+    aarr=np.array(alist)
+    barr=np.array(blist)
+    darr=np.array(dlist)
+    print(zlist, alist, blist, dlist)
+    width=0.09
+    plt.bar(zarr - width/3, aarr, width/3, label='Asymmetric')
+    plt.bar(zarr, barr, width/3, label='Bulge')
+    plt.bar(zarr + width/3, darr, width/3, label='Disc')
+    plt.legend()
+    plt.xlabel('z')
+    plt.ylabel('no. of galaxies by'+cat)
+    plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/barchart'+cat+'.png')
+    plt.show()
+
+def calccatfrac2(cat, catfrac, typ, colormin):
+    if cat == typ:
+        return catfrac
+    else:
+        return colormin
+
+def plotfrac(df, y, cat, color):
+    fig, ax =plt.subplots(1, 3, sharex=True, sharey=True, figsize=(9,5))
+    
+    dfA=df.copy()
+    dfB=df.copy()
+    dfD=df.copy()
+    colormin=df[color].min()
+    dfA['catfrac2']=dfA.apply(lambda x: calccatfrac2(x.categoryn, x.catDMfrac, 'A', colormin), axis=1)
+    dfB['catfrac2']=dfB.apply(lambda x: calccatfrac2(x.categoryn, x.catDMfrac, 'B', colormin), axis=1)
+    dfD['catfrac2']=dfD.apply(lambda x: calccatfrac2(x.categoryn, x.catDMfrac, 'D', colormin), axis=1)
+    ABD=[dfA, dfB, dfD]
+    Cmap=plt.cm.viridis
+    
+    Norm=plt.Normalize(df[color].min(),df[color].max())
+    for i, dff in enumerate(ABD):
+        dff=dff.drop_duplicates(['z',y])
+        data=dff.pivot(y, 'z', 'catfrac2')
+        print(data)
+        ax[i].imshow(data, aspect='auto', cmap=Cmap, norm=Norm, origin='lower', extent=(df.z.min(), df.z.max(), df[y].min(), df[y].max()))
+        ax[i].set_xlabel('z')
+
+    ax[0].set_title('Asymmetrics'), ax[1].set_title('Bulges'), ax[2].set_title('Discs')
+    plt.xlim(df.z.min(), df.z.max()+0.1), plt.ylim(df[y].min(),df[y].max() +0.1)
+    ax[0].set_ylabel(''+y+' $M_{\odot}$')
+    plt.subplots_adjust(right=0.8, wspace=0, hspace=0)
+    cbar_ax=fig.add_axes([0.8,0.11,0.05,0.77])
+    sm=plt.cm.ScalarMappable(cmap=Cmap, norm=Norm)
+    sm.set_array([])
+    cbar=plt.colorbar(sm, cax=cbar_ax).set_label('Fraction in M* in each component')
+    plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/evolvingfrac'+y+''+cat+'colouredby'+color+'.png')
+    plt.show()
+
 def plotbulgetodisc(df, sim_name):
-    df=df[df.n_total>0.4]
-    df=df[df.asymm>0]
+    df=df[df.n_total>0]
+    #df=df[df.asymm>0]
+    df=df[df.z<3]
     df=cleanandtransformdata(df)
-    print(df.info())
-    df=df[df.z<2]
+
+
+    
+    print(df[['zrounded', 'roundlogmass2','categoryn', 'counts','catcounts', 'catfrac']])
+
+    plotfrac(df,'roundDMmass2', 'categoryn', 'catDMfrac')
+    #categorybarchart(df, 'categoryn')
+    #categorybarchart(df, 'categorybt')
+    
+
+    exit()
+    
     #df=cleanandtransformdata(df)
     #df=df[df.sSFR>0]
     plotmultivariateplot(df)
@@ -1254,13 +1366,6 @@ def plotbulgetodisc(df, sim_name):
     plotmovinghistogram(df, 'logsSFR', 'asymm')
     exit()
     
-    exit()
-    
-    exit()
-    
-    
-    exit()
-
 
 
     maxnum=df.num.max()
@@ -1294,8 +1399,6 @@ def plotbulgetodisc(df, sim_name):
     #df work
     
     
-    
-
     evolutionplot(df, 'Starmass', 'Starmass')
     threeDplot(df, 'z','DiscToTotal','logBHmass', 'Starmass', 'logsSFR')
     exit()
