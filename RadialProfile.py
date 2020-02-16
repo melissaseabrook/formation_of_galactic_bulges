@@ -1,4 +1,5 @@
 import numpy as np
+from numpy import *
 import matplotlib.pyplot as plt
 from PIL import Image
 import cv2
@@ -9,6 +10,16 @@ import math
 from scipy.optimize import curve_fit
 from scipy import stats
 import seaborn as sns
+from astropy.modeling import models, fitting
+
+def logx(x):
+    if x !=0:
+        if x>0:
+            return np.log10(x)
+        if x<0:
+            return -np.log10(-x)
+    else:
+        return 0
 
 def findcenter(image):
 	#finds coords of central bulge
@@ -19,13 +30,12 @@ def findcenter(image):
 
 def radial_profile(image, center):
 	#returns average pixel intensity for all possible radius, centred around the central bulge
-	npix, npiy = image.shape[:2]
+	npix, npiy = image.shape
 	x1 = np.arange(0,npix)
 	y1 = np.arange(0,npiy)
 	x,y = np.meshgrid(y1,x1)
 	r=np.sqrt((x-center[0])**2+(y-center[1])**2)
 	r=r.astype(np.int)
-	image=np.average(image, axis=2, weights=[0.2126,0.587,0.114])
 	tbin=np.bincount(r.ravel(),image.ravel()) #sum of image values in each radius bin
 	nr=np.bincount(r.ravel()) #no in each radius bin
 	radialprofile=(tbin)/(nr)
@@ -313,7 +323,8 @@ def plotradialprofile(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, pcov1,
 	plt.tight_layout()
 	plt.savefig('galaxygraphsbin'+sim_name+'/TESTradialprofile/VaryingRadialProfile'+radbintype+''+imagefile)
 	#plt.savefig('galaxygraphsbin'+sim_name+'/TESTradialprofile/Sersicfitradialprofile'+str(sigma_bulge)+''+str(sigma_disc)+''+radbintype+''+imagefile)
-	plt.show()
+	#plt.show()
+	#plt.close()
 
 	#plt.close(fig)
 	#plt.close('all')
@@ -402,7 +413,8 @@ def calculateSersicIndices(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, n
 		print('n nan')
 	#plotchisquared(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, i_ebulge,r_ebulge,isolated_bulge, nr)
 	try:
-		plotradialprofile(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, pcov1, pcovdisc,pcovdisca,pcovbulge,pcovbulgea,isolated_discsim,isolated_bulge,isolated_bulgesim, isolated_discsima,isolated_bulgea,isolated_bulgesima, totalsim, totalsima, n_disc,n_disca,n_bulge,n_bulgea, n1, sim_name, imagefile, sigma_bulge,sigma_disc,radbintype)
+		pass
+		#plotradialprofile(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, pcov1, pcovdisc,pcovdisca,pcovbulge,pcovbulgea,isolated_discsim,isolated_bulge,isolated_bulgesim, isolated_discsima,isolated_bulgea,isolated_bulgesima, totalsim, totalsima, n_disc,n_disca,n_bulge,n_bulgea, n1, sim_name, imagefile, sigma_bulge,sigma_disc,radbintype)
 	except:
 		pass
 	return n1, pcov1, poptdisca, pcovdisca, poptbulgea, pcovbulgea, poptdisc, pcovdisc,  poptbulge, pcovbulge, isolated_discsima, isolated_bulgea, isolated_bulgesima, totalsima, isolated_discsim, isolated_bulge, isolated_bulgesim, totalsim, i_ebulge, r_ebulge, i_ebulgea, r_ebulgea
@@ -569,21 +581,96 @@ def binnedasymmetry(image):
     asymmerror=np.std([asymm1,asymm2,asymm3])
     return meanasymm, asymmerror
 
+def twoDsersicfit(sim_name, imagefile, image, i_e, r_e, guess_n, center):
+
+	#gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+	blur = cv2.GaussianBlur(image, ksize=(11,11), sigmaX=3,sigmaY=3)
+
+	x0,y0=center
+	z=blur.copy()
+	ny, nx = blur.shape
+	y, x = np.mgrid[0:ny, 0:nx]
+	sersicinit=models.Sersic2D(amplitude = i_e, r_eff = r_e, n=guess_n, x_0=x0, y_0= y0)
+	fit_sersic = fitting.LevMarLSQFitter()
+	sersic_model = fit_sersic(sersicinit, x, y, z, maxiter=500, acc=1e-5)
+	
+	n=sersic_model.n.value
+
+	sim=sersic_model(x,y)
+
+	logimg=ma.log10(image)
+	logimg=logimg.filled(0)
+	logblur=ma.log10(blur)
+	logblur=logblur.filled(0)
+	logsim=ma.log10(sim)
+	logsim=logsim.filled(0)
+
+	logres = (np.abs(logblur - logsim))
+	res = (np.abs(blur - sim))
+	
+	fig, ax=plt.subplots(1,4, figsize=(12,4))
+	im=ax[0].imshow(logimg, origin='lower', interpolation='nearest', vmin=logimg.min(), vmax=logimg.max())
+	ax[1].imshow(logblur, origin='lower', interpolation='nearest', vmin=logimg.min(), vmax=logimg.max())
+	ax[2].imshow(logsim, origin='lower', interpolation='nearest', vmin=logimg.min(), vmax=logimg.max())
+	ax[3].imshow(logres, origin='lower', interpolation='nearest', vmin=logimg.min(), vmax=logimg.max())
+	ax[0].axis('off')
+	ax[0].set_title('image')
+	ax[1].axis('off')
+	ax[1].set_title('blur')
+	ax[2].axis('off')
+	ax[2].set_title('model')
+	ax[3].axis('off')
+	ax[3].set_title('residual')
+	fig.subplots_adjust(right=0.8)
+	cbar_ax=fig.add_axes([0.85,0.15,0.05,0.7])
+	fig.colorbar(im, cax=cbar_ax)
+	cbar_ax.set_ylabel('log brightness', rotation=270, labelpad=15)
+	plt.savefig('galaxygraphsbin'+sim_name+'/2dSersicfitlog'+imagefile)
+	plt.show()
+	
+	fig, ax=plt.subplots(1,4, figsize=(12,4))
+	im=ax[0].imshow(image, origin='lower', interpolation='nearest', vmin=image.min(), vmax=image.max())
+	ax[1].imshow(blur, origin='lower', interpolation='nearest', vmin=image.min(), vmax=image.max())
+	ax[2].imshow(sim, origin='lower', interpolation='nearest', vmin=image.min(), vmax=image.max())
+	ax[3].imshow(res, origin='lower', interpolation='nearest', vmin=image.min(), vmax=image.max())
+	ax[0].axis('off')
+	ax[0].set_title('image')
+	ax[1].axis('off')
+	ax[1].set_title('blur')
+	ax[2].axis('off')
+	ax[2].set_title('model')
+	ax[3].axis('off')
+	ax[3].set_title('residual')
+	fig.subplots_adjust(right=0.8)
+	cbar_ax=fig.add_axes([0.85,0.15,0.05,0.7])
+	fig.colorbar(im, cax=cbar_ax)
+	cbar_ax.set_ylabel('brightness', rotation=270, labelpad=15)
+	plt.savefig('galaxygraphsbin'+sim_name+'/2dSersicfit'+imagefile)
+	plt.show()
+
+	
+
+	n_error=np.sqrt(np.sum(logres))
+
+	return n, n_error
+
 def run_radial_profile(image, imagefile, sim_name):
 	#vary_radial_bins(image, imagefile, sim_name)
 	#vary_sigma(image, imagefile, sim_name)
+	image2=image.copy()
+	image=np.average(image, axis=2, weights=[0.2126,0.587,0.114])
 	asymm = findassymetry(image)
 	meanasymm, asymmerror=binnedasymmetry(image)
 
 	radbintype='equalradius'
 	#plots radius vs pixel intensity and its log
-	maxVal, center = findcenter(image)
+	maxVal, center = findcenter(image2)
 	rad, stdbins, r_arr, nr=radial_profile(image,center)
 	max_r=np.sqrt(2)*15
 	r=r_arr/256*30
 	sigma_bulge = 5
 	sigma_disc = 1
-	bindex,hindex, (hcX,hcY), (bcX,bcY) = findbulge(sim_name, image, imagefile, sigma_bulge, sigma_disc)
+	bindex,hindex, (hcX,hcY), (bcX,bcY) = findbulge(sim_name, image2, imagefile, sigma_bulge, sigma_disc)
 	i_e, r_e, centralbrightness, totalbrightness= findeffectiveradius(rad[0:int(hindex)], r[0:int(hindex)], nr[0:int(hindex)]) 
 	#r= np.linspace(0, max_r, num=maxr)
 	nr=nr[1:int(hindex)]
@@ -597,7 +684,13 @@ def run_radial_profile(image, imagefile, sim_name):
 	hindex=int(hindex)
 	bhindex=int((bindex+hindex)/2)
 	n1, pcov1, poptdisca, pcovdisca, poptbulgea, pcovbulgea, poptdisc, pcovdisc,  poptbulge, pcovbulge, isolated_discsima, isolated_bulgea, isolated_bulgesima, totalsima, isolated_discsim, isolated_bulge, isolated_bulgesim, totalsim, i_ebulge, r_ebulge, i_ebulgea, r_ebulgea = calculateSersicIndices(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, nr, sim_name, imagefile, sigma_bulge, sigma_disc, radbintype)
-	plotchisquared(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, i_ebulge,r_ebulge,isolated_bulge, nr, sim_name)
+	
+	n2, n2_error=twoDsersicfit(sim_name, imagefile, image, i_e, r_e, n1, center)
+	print(n1, n2, n2_error)
+	
+
+
+	#plotchisquared(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, i_ebulge,r_ebulge,isolated_bulge, nr, sim_name)
 	
 
 	
@@ -662,12 +755,12 @@ def run_radial_profile(image, imagefile, sim_name):
 	"""
 
 if __name__ == "__main__":
-	sim_name=['RecalL0025N0752']
+	#sim_name=['RecalL0025N0752']
 	#sim_name='RecalL0025N0752'
-	imagefileRecalL0025N0752=['RecalL0025N0752galface_4938.png','']
-	#sim_name=['RecalL0025N0752', 'RefL0025N0376','RefL0050N0752']
-	#imagefileRecalL0025N0752=['RecalL0025N0752galface_646493.png','RecalL0025N0752galface_737885.png','RecalL0025N0752galface_746518.png','RecalL0025N0752galface_853401.png','RecalL0025N0752galface_4938.png','RecalL0025N0752galface_621500.png','RecalL0025N0752galface_726306.png','RecalL0025N0752galface_51604.png']
-	imagefileRefL0025N0376=['RefL0025N0376galface_1.png','RefL0025N0376galface_135107.png','RefL0025N0376galface_154514.png','RefL0025N0376galface_160979.png','RefL0025N0376galface_172979.png']
+	#imagefileRecalL0025N0752=['RecalL0025N0752galface_4938.png','']
+	sim_name=['RecalL0025N0752', 'RefL0050N0752']
+	imagefileRecalL0025N0752=['RecalL0025N0752galface_646493.png','RecalL0025N0752galface_737885.png','RecalL0025N0752galface_746518.png','RecalL0025N0752galface_853401.png','RecalL0025N0752galface_4938.png','RecalL0025N0752galface_621500.png','RecalL0025N0752galface_726306.png','RecalL0025N0752galface_51604.png']
+	#imagefileRefL0025N0376=['RefL0025N0376galface_1.png','RefL0025N0376galface_135107.png','RefL0025N0376galface_154514.png','RefL0025N0376galface_160979.png','RefL0025N0376galface_172979.png']
 	imagefileRefL0050N0752=['RefL0050N0752galface_2273534.png','RefL0050N0752galface_2276263.png','RefL0050N0752galface_514258.png','RefL0050N0752galface_2355640.png','RefL0050N0752galface_2639531.png']
 
 	for name in sim_name:
