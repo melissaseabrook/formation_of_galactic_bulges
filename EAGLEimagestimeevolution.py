@@ -38,49 +38,22 @@ def getdata(mySims, querytype):
                     SH.HalfMassRad_Star as HalfMassRadius, \
                     AP.Mass_Star as Starmass, \
                     AP.Mass_BH as BHmass, \
+                    SH.MassType_Gas as Gasmass, \
                     SH.MassType_DM as DMmass, \
+                    SH.SF_MassFromSNII as SF_MassFromSNII, \
+                    SH.NSF_MassFromSNII as NSF_MassFromSNII, \
+                    SH.Stars_MassFromSNII as Stars_MassFromSNII, \
+                    SH.SF_MassFromSNIa as SF_MassFromSNIa, \
+                    SH.NSF_MassFromSNIa as NSF_MassFromSNIa, \
+                    SH.Stars_MassFromSNIa as Stars_MassFromSNIa, \
                     AP.SFR as SFR, \
                     SH.StellarInitialMass as StellarInitialMass, \
                     SH.BlackHoleMassAccretionRate as BHAccretionrate, \
                     SH.Vmax as Vmax, \
                     SH.VmaxRadius as Vmaxradius, \
                     MK.DiscToTotal as DiscToTotal, \
-                    MK.Ellipticity as StellarEllipticity \
-                FROM \
-                    %s_Subhalo as SH, \
-                    %s_Subhalo as ref, \
-                    %s_Aperture as AP, \
-                    %s_MorphoKinem as MK \
-                WHERE \
-                    ref.MassType_Star between 1.0e10 and 5.0e11 and \
-                    ref.StarFormationRate between 0.1 and 15 and \
-                    ref.MassType_BH between 1.0e6 and 1.0e8 and \
-                    ref.SnapNum=28 and \
-                    ((SH.SnapNum > ref.SnapNum and ref.GalaxyID between SH.GalaxyID and SH.TopLeafID) or (SH.SnapNum <= ref.SnapNum and SH.GalaxyID between ref.GalaxyID and ref.TopLeafID)) and \
-                    SH.GalaxyID = AP.GalaxyID and \
-                    SH.GalaxyID = MK.GalaxyID and \
-                    AP.ApertureSize = 30 and\
-                    ref.Image_face IS NOT null \
-                ORDER BY \
-                    SH.Redshift"%(sim_name, sim_name, sim_name, sim_name)
-
-        elif querytype == 'allbranches':
-            Query = "SELECT \
-                    ref.GalaxyID as ProjGalaxyID, \
-                    SH.GalaxyID as DescGalaxyID, \
-                    SH.DescendantID as DescID, \
-                    SH.Redshift as z, \
-                    SH.Image_Face as face, \
-                    SH.HalfMassRad_Star as HalfMassRadius, \
-                    AP.Mass_Star as Starmass, \
-                    AP.Mass_BH as BHmass, \
-                    AP.Mass_DM as DMmass, \
-                    AP.SFR as SFR, \
-                    SH.StellarInitialMass as StellarInitialMass, \
-                    SH.BlackHoleMassAccretionRate as BHAccretionrate, \
-                    SH.Vmax as Vmax, \
-                    SH.VmaxRadius as Vmaxradius, \
-                    MK.DiscToTotal as DiscToTotal, \
+                    MK.KappaCoRot as KappaCoRot, \
+                    MK.DMEllipticity as DMEllipticity, \
                     MK.Ellipticity as StellarEllipticity \
                 FROM \
                     %s_Subhalo as SH, \
@@ -90,35 +63,66 @@ def getdata(mySims, querytype):
                 WHERE \
                     ref.MassType_Star between 1.0e10 and 1.0e11 and \
                     ref.StarFormationRate between 0.1 and 15 and \
-                    ref.MassType_BH between 1.0e6 and 1.0e7 and \
                     ref.SnapNum=28 and \
-                    SH.GalaxyID between ref.GalaxyID and ref.LastProgID and \
+                    ((SH.SnapNum > ref.SnapNum and ref.GalaxyID between SH.GalaxyID and SH.TopLeafID) or (SH.SnapNum <= ref.SnapNum and SH.GalaxyID between ref.GalaxyID and ref.TopLeafID)) and \
                     SH.GalaxyID = AP.GalaxyID and \
                     SH.GalaxyID = MK.GalaxyID and \
                     AP.ApertureSize = 30 and\
-                    ref.Image_face IS NOT null\
+                    SH.Redshift <3 and \
+                    ref.Image_face IS NOT null \
+                ORDER BY \
+                    SH.Redshift"%(sim_name, sim_name, sim_name, sim_name)
+                
+            myData = sql.execute_query(con , Query)
+            df=pd.DataFrame(myData, columns=['ProjGalaxyID','DescGalaxyID','DescID','z','Z','face','HalfMassRadius', 'VelDisp','Starmass', 'BHmass','DMmass','Gasmass','SFR','StellarInitialMass','BHAccretionrate','Vmax','Vmaxradius','DiscToTotal', 'DispAnisotropy','DMEllipticity','StellarEllipticity','StellarCoRotKE','MedOrbitCircu','RotToDispRatio','Triaxiality'])
+            df['face']=  df['face'].str.decode("utf-8")
+            df['face']=df['face'].str.replace('"<img src=', '').str.replace('>"', '').str.replace("'",'')
+            df=df.assign(name1 = lambda x: x.face)
+            df['name1']=df['name1'].str.replace('http://virgodb.cosma.dur.ac.uk/eagle-webstorage/'+sim_name+'_Subhalo/', '')
+            df=df.assign(filename = lambda x: sim_name +'' + x.name1)
+            df['image']=df.apply(lambda x: download_image(x.face, x.filename, sim_name, querytype), axis=1)
+            df.to_csv('evolvingEAGLEimages'+querytype+'df'+sim_name+'.csv')
+            print(df['image'])
+
+        elif querytype == 'allbranches':
+            Query = "SELECT \
+                    ref.GalaxyID as ProjGalaxyID, \
+                    SH.GalaxyID as DescGalaxyID, \
+                    SH.DescendantID as DescID, \
+                    SH.Redshift as z, \
+                    AP.Mass_Star as Starmass, \
+                    AP.Mass_BH as BHmass, \
+                    SH.MassType_DM as DMmass,\
+                    FOF.Group_M_Crit200 as M200, \
+                    FOF.Group_R_Crit200 as R200, \
+                    AP.Mass_Gas as Gasmass\
+                FROM \
+                    %s_Subhalo as SH, \
+                    %s_Subhalo as ref, \
+                    %s_FOF as FOF, \
+                    %s_Aperture as AP \
+                WHERE \
+                    ref.MassType_Star between 1.0e10 and 1.0e11 and \
+                    ref.StarFormationRate between 0.1 and 15 and \
+                    ref.SnapNum=28 and \
+                    SH.GalaxyID between ref.GalaxyID and ref.LastProgID and \
+                    SH.GalaxyID = AP.GalaxyID and \
+                    FOF.GroupID = SH.GroupID and \
+                    AP.ApertureSize = 30 and\
+                    SH.Redshift <3 \
                 ORDER BY \
                     ref.GalaxyID, \
                     SH.Redshift"%(sim_name, sim_name, sim_name, sim_name)
-
-        myData = sql.execute_query(con , Query)
-        df=pd.DataFrame(myData, columns=['ProjGalaxyID','DescGalaxyID','DescID','z','Z','face','HalfMassRadius', 'VelDisp','Starmass', 'BHmass','DMmass','Gasmass','SFR','StellarInitialMass','BHAccretionrate','Vmax','Vmaxradius','DiscToTotal', 'DispAnisotropy','DMEllipticity','StellarEllipticity','StellarCoRotKE','MedOrbitCircu','RotToDispRatio','Triaxiality'])
-        df['face']=  df['face'].str.decode("utf-8")
-        df['face']=df['face'].str.replace('"<img src=', '').str.replace('>"', '').str.replace("'",'')
-        df=df.assign(name1 = lambda x: x.face)
-        df['name1']=df['name1'].str.replace('http://virgodb.cosma.dur.ac.uk/eagle-webstorage/'+sim_name+'_Subhalo/', '')
-        df=df.assign(filename = lambda x: sim_name +'' + x.name1)
-        df['image']=df.apply(lambda x: download_image(x.face, x.filename, sim_name, querytype), axis=1)
-        df.to_csv('evolvingEAGLEimages'+querytype+'df'+sim_name+'.csv')
-        print(df['image'])
-   
+            myData = sql.execute_query(con , Query)
+            df=pd.DataFrame(myData, columns=['ProjGalaxyID','DescGalaxyID','DescID','z','Starmass', 'BHmass','DMmass','M200','R200','Gasmass'])
+            df.to_csv('evolvingEAGLEimages'+querytype+'df'+sim_name+'.csv')
     
 
 
 if __name__ == "__main__":
     mySims = np.array(['RefL0050N0752'])
     #querytype = allbranches or mainbranch
-    querytype= 'mainbranch'
+    querytype= 'allbranches'
     getdata(mySims, querytype)
     
 
