@@ -543,17 +543,18 @@ def threeDplot(df, x,y,z, column_size, column_colour):
     plt.show()
 
 def colorbarplot(df, x,y, column_size, column_colour, column_marker):
-    norm=plt.Normalize(df[column_colour].min(), df[column_colour].max())
+    Norm=mcol.DivergingNorm(vmin=df[column_colour].min(), vcenter=df[column_colour].median(), vmax=df[column_colour].max())
+    Cmap=mcol.LinearSegmentedColormap.from_list("cmop", ['red','mediumorchid','blue'])
     df['marker_bin']=pd.qcut(df.Z, [0,0.15,0.85,1], labels=['low','okay','high'])
     markers={"low":'^', "okay":'o', 'high':'s'}
-    sm=plt.cm.ScalarMappable(cmap='autumn', norm=norm)
+    sm=plt.cm.ScalarMappable(cmap=Cmap, norm=Norm)
     sm.set_array([])
-    ax=sns.relplot(x=x, y=y, size=column_size, sizes=(10,150), hue=column_colour, palette='autumn', style='marker_bin', markers=markers,data=df)
+    ax=sns.relplot(x=x, y=y, size=column_size, sizes=(10,150), hue=column_colour, palette=Cmap, style='marker_bin', markers=markers,data=df)
     ax._legend.remove()
     ax.fig.colorbar(sm).set_label(column_colour)
     plt.subplots_adjust(top=0.9)
     ax.fig.suptitle(''+x+' vs '+y+', coloured by'+column_colour+', sized by'+column_size+', shaped by'+column_marker+'')
-    ax.savefig('galaxygraphsbin'+sim_name+'/'+x+'vs'+y+'.png')
+    ax.savefig('galaxygraphsbin'+sim_name+'/'+x+'vs'+y+'2.png')
     plt.show()
 
 def stackedhistogram(df, param1, param2, param3, param4, param5):
@@ -695,24 +696,52 @@ def colourscatter(df,x,y, column_colour, thresh):
     plt.show()
 
 def plotbulgetodisc(df, sim_name):
-    #drop_numerical_outliers(df, 3)
     print(df.columns.values)
-    
-    #df=df[df.n2d>0]
-    #cleanandtransformdata(df)
     df['sDMmassType']=df.apply(lambda x: divide(x.StarmassType,x.DMmass), axis=1)
     df['logsDMmassType']=df.apply(lambda x: logx(x.sDMmassType), axis=1)
+    df['sBHmass']=df.apply(lambda x: divide(x.BHmass,x.Starmass), axis=1)
+    df['logsBHmass']=df.apply(lambda x: logx(x.sBHmass), axis=1)
     df['logmassType']=df.apply(lambda x: logx(x.StarmassType), axis=1)
     df['sSFRType']=df.apply(lambda x: divide(x.SFR*1e12,x.StarmassType), axis=1)
     df['logsSFRType']=df.apply(lambda x: logx(x.sSFRType), axis=1)
     df['logMsMh']=df.apply(lambda x: divide(x.logmass, x.logDMmass), axis=1)
-    df=df[df.logDMmass>8]
-    n2ddf=df[df.n2d>0]
-    vdf=df.dropna(subset=['vHsqrd'])
-    vdf=vdf[vdf.vHsqrd<40]
-    n2dvdf=vdf[vdf.n2d>0]
+    df=df[df.logDMmass>11]
+    df['sSFR']=df.apply(lambda x: divide(x.SFR,x.Starmass), axis=1)
+    df['logsSFR']=df.apply(lambda x: logx(x.sSFR), axis=1)
+    df=df[df.logsSFR<0]
+    df=df[df.logsSFR>-12]
+    n2df=df[df.n2d>0.5]
+    ndf=df[df.n_total>0.5]
+    n2ndf=ndf[ndf.n2d>0.5]
+    
+    
+    #vdf=df.dropna(subset=['vHsqrd'])
+    #vdf=vdf[vdf.vHsqrd<40]
+    #n2dvdf=vdf[vdf.n2d>0]
 
-    colourscatter(n2ddf, 'logDMmass','logmass','n2d', 1.4)
+
+
+    colorbarplot(ndf, 'n2d', 'logBHmass', 'logmass', 'logsSFR', 'logBHmass', )
+    colorbarplot(n2df, 'n2d', 'logDMmass', 'logmass', 'logsSFR', 'logBHmass')
+    colorbarplot(n2ndf, 'n2d', 'logsBHmass', 'logmass', 'logsSFR', 'logBHmass')
+    colorbarplot(n2ndf, 'n2d', 'logsDMmass', 'logmass', 'logsSFR', 'logBHmass')
+    colorbarplot(n2ndf, 'n2d', 'DMEllipticity', 'logmass', 'logsSFR', 'logBHmass')
+    colorbarplot(n2ndf, 'n2d', 'StellarEllipticity', 'logmass', 'logsSFR', 'logBHmass')
+    colorbarplot(n2ndf, 'n2d', 'BHAccretionrate', 'logmass', 'logsSFR', 'logBHmass')
+
+    colorbarplot(ndf, 'BulgeToTotal', 'logBHmass', 'logmass', 'logsSFR', 'logBHmass', )
+    colorbarplot(n2df, 'BulgeToTotal', 'logDMmass', 'logmass', 'logsSFR', 'logBHmass')
+    colorbarplot(n2ndf, 'BulgeToTotal', 'logsBHmass', 'logmass', 'logsSFR', 'logBHmass')
+    colorbarplot(n2ndf, 'BulgeToTotal', 'logsDMmass', 'logmass', 'logsSFR', 'logBHmass')
+    colorbarplot(n2ndf, 'BulgeToTotal', 'DMEllipticity', 'logmass', 'logsSFR', 'logBHmass')
+    colorbarplot(n2ndf, 'BulgeToTotal', 'StellarEllipticity', 'logmass', 'logsSFR', 'logBHmass')
+    colorbarplot(n2ndf, 'BulgeToTotal', 'BHAccretionrate', 'logmass', 'logsSFR', 'logBHmass')
+
+    #colourscatter(n2df, 'logmass','logsSFR','n2d', 1.4)
+    #colourscatter(ndf, 'logmass','logsSFR','n_total', 1.5)
+    #colourscatter(ndf, 'logmass','logsSFR','BulgeToTotal', 0.5)
+    exit()
+    #colourscatter(n2ddf, 'logmass','logsSFR','n2d', 1.3)
     exit()
     #colourscatter(n2ddf, 'logDMmass','logsSFRType','n2d', 1.4)
     #colourscatter(df, 'logDMmass','logsSFRType','BulgeToTotal', 0.5)
@@ -852,37 +881,38 @@ def plotbulgetodisc(df, sim_name):
 
 if __name__ == "__main__":
     sim_name='RefL0050N0752'
-    read_all_data=False
+    read_all_data=True
     read_extra_data=True
     read_image_data=False
     if(read_all_data):
         print('.........reading.......')
         df=pd.read_csv('EAGLEbulgedisc'+sim_name+'final.csv')
-    if(read_image_data):
-        print('.........writing.......')
-        df=pd.read_csv('EAGLEimagesdf'+sim_name+'.csv')
-        discbulgetemp=[]
-        for filename in df['filename']:
-            BGRimage=cv2.imread('galaxyimagebin'+sim_name+'/'+filename)
-            btdradius, btdintensity, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius =findandlabelbulge(BGRimage, filename, sim_name)
-            n_total, n2d, n_disca, n_bulgea, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disca_error, n_bulgea_error, n_disc_error, n_bulge_error, n_bulge_exp_error, con, r80, r20, asymm, asymmerror=findsersicindex(BGRimage, bradius, hradius)
-            #morph_c, morph_asymm, morph_sersic_n, morph_smoothness, morph_sersic_rhalf, morph_xc_asymmetry, morph_yc_asymmetry=runstatmorph(BGRimage)
-            #discbulgetemp.append([filename, btdradius, btdintensity,n_total, n2d, n_disca, n_bulgea, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disca_error, n_bulgea_error, n_disc_error, n_bulge_error, n_bulge_exp_error, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius, con, r80, r20, asymm, morph_c, morph_asymm, morph_sersic_n, morph_smoothness, morph_sersic_rhalf, morph_xc_asymmetry, morph_yc_asymmetry])
-            discbulgetemp.append([filename, btdradius, btdintensity,n_total, n2d, n_disca, n_bulgea, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disca_error, n_bulgea_error, n_disc_error, n_bulge_error, n_bulge_exp_error, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius, con, r80, r20, asymm, asymmerror])
-        #discbulgedf=pd.DataFrame(discbulgetemp, columns=['filename', 'btdradius', 'btdintensity','n_total','n2d','n_disca','n_bulgea','n_disc','n_bulge','n_bulge_exp', 'n_total_error', 'n_disca_error', 'n_bulgea_error', 'n_disc_error', 'n_bulge_error', 'n_bulge_exp_error', 'star_count', 'discradius', 'bulgeradius', 'disc_intensity', 'bulge_intensity', 'btotalintensity', 'btotalradius', 'con', 'r80', 'r20', 'asymm', 'morph_c', 'morph_asymm', 'morph_sersic_n', 'morph_smoothness', 'morph_sersic_rhalf', 'morph_xc_asymmetry', 'morph_yc_asymmetry'])
-        discbulgedf=pd.DataFrame(discbulgetemp, columns=['filename', 'btdradius', 'btdintensity','n_total','n2d','n_disca','n_bulgea','n_disc','n_bulge','n_bulge_exp', 'n_total_error', 'n_disca_error', 'n_bulgea_error', 'n_disc_error', 'n_bulge_error', 'n_bulge_exp_error', 'star_count', 'discradius', 'bulgeradius', 'disc_intensity', 'bulge_intensity', 'btotalintensity', 'btotalradius', 'con', 'r80', 'r20', 'asymm', 'asymmerror'])
-        df.filename.astype(str)
-        discbulgedf.filename.astype(str)
-        df=pd.merge(df, discbulgedf, on=['filename'], how='outer')
-        df.to_csv('EAGLEbulgedisc'+sim_name+'.csv')
+    else:
+        if(read_image_data):
+            print('.........writing.......')
+            df=pd.read_csv('EAGLEimagesdf'+sim_name+'.csv')
+            discbulgetemp=[]
+            for filename in df['filename']:
+                BGRimage=cv2.imread('galaxyimagebin'+sim_name+'/'+filename)
+                btdradius, btdintensity, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius =findandlabelbulge(BGRimage, filename, sim_name)
+                n_total, n2d, n_disca, n_bulgea, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disca_error, n_bulgea_error, n_disc_error, n_bulge_error, n_bulge_exp_error, con, r80, r20, asymm, asymmerror=findsersicindex(BGRimage, bradius, hradius)
+                #morph_c, morph_asymm, morph_sersic_n, morph_smoothness, morph_sersic_rhalf, morph_xc_asymmetry, morph_yc_asymmetry=runstatmorph(BGRimage)
+                #discbulgetemp.append([filename, btdradius, btdintensity,n_total, n2d, n_disca, n_bulgea, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disca_error, n_bulgea_error, n_disc_error, n_bulge_error, n_bulge_exp_error, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius, con, r80, r20, asymm, morph_c, morph_asymm, morph_sersic_n, morph_smoothness, morph_sersic_rhalf, morph_xc_asymmetry, morph_yc_asymmetry])
+                discbulgetemp.append([filename, btdradius, btdintensity,n_total, n2d, n_disca, n_bulgea, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disca_error, n_bulgea_error, n_disc_error, n_bulge_error, n_bulge_exp_error, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius, con, r80, r20, asymm, asymmerror])
+            #discbulgedf=pd.DataFrame(discbulgetemp, columns=['filename', 'btdradius', 'btdintensity','n_total','n2d','n_disca','n_bulgea','n_disc','n_bulge','n_bulge_exp', 'n_total_error', 'n_disca_error', 'n_bulgea_error', 'n_disc_error', 'n_bulge_error', 'n_bulge_exp_error', 'star_count', 'discradius', 'bulgeradius', 'disc_intensity', 'bulge_intensity', 'btotalintensity', 'btotalradius', 'con', 'r80', 'r20', 'asymm', 'morph_c', 'morph_asymm', 'morph_sersic_n', 'morph_smoothness', 'morph_sersic_rhalf', 'morph_xc_asymmetry', 'morph_yc_asymmetry'])
+            discbulgedf=pd.DataFrame(discbulgetemp, columns=['filename', 'btdradius', 'btdintensity','n_total','n2d','n_disca','n_bulgea','n_disc','n_bulge','n_bulge_exp', 'n_total_error', 'n_disca_error', 'n_bulgea_error', 'n_disc_error', 'n_bulge_error', 'n_bulge_exp_error', 'star_count', 'discradius', 'bulgeradius', 'disc_intensity', 'bulge_intensity', 'btotalintensity', 'btotalradius', 'con', 'r80', 'r20', 'asymm', 'asymmerror'])
+            df.filename.astype(str)
+            discbulgedf.filename.astype(str)
+            df=pd.merge(df, discbulgedf, on=['filename'], how='outer')
+            df.to_csv('EAGLEbulgedisc'+sim_name+'.csv')
 
-    if(read_extra_data):
-        print('.........reading.......')
-        df1=pd.read_csv('EAGLEbulgedisc'+sim_name+'.csv')
-        cleanandtransformdata(df1)
-        df2=pd.read_csv('EAGLEextradatadf'+sim_name+'.csv')
-        df= pd.merge(df1, df2, on=['filename'], how='left').drop_duplicates()
-        df.to_csv('EAGLEbulgedisc'+sim_name+'final.csv')
+        if(read_extra_data):
+            print('.........reading.......')
+            df1=pd.read_csv('EAGLEbulgedisc'+sim_name+'.csv')
+            cleanandtransformdata(df1)
+            df2=pd.read_csv('EAGLEextradatadf'+sim_name+'.csv')
+            df= pd.merge(df1, df2, on=['filename'], how='left').drop_duplicates()
+            df.to_csv('EAGLEbulgedisc'+sim_name+'final.csv')
         
 
     plotbulgetodisc(df, sim_name)
