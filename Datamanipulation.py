@@ -27,8 +27,6 @@ from astropy.cosmology import Planck13
 import statmorph
 from astropy.modeling import models, fitting
 
-
-
 #sns.set_style('whitegrid')
 def logx(x):
     if x !=0:
@@ -398,69 +396,131 @@ def runstatmorph(image):
         morph_c=morph_asymm=morph_sersic_n=morph_smoothness=morph_sersic_rhalf=morph_xc_asymmetry=morph_yc_asymmetry=np.nan
     return morph_c, morph_asymm, morph_sersic_n, morph_smoothness, morph_sersic_rhalf, morph_xc_asymmetry, morph_yc_asymmetry
 
-def findmergers(df):
-    df=df[['z', 'ProjGalaxyID', 'DescID', 'DescGalaxyID', 'Starmass', 'BHmass', 'DMmass', 'Gasmass', 'M200', 'R200']]
-    G=nx.from_pandas_edgelist(df=df, source='DescGalaxyID', target='DescID', create_using=nx.DiGraph)
-    G.add_nodes_from(nodes_for_adding=df.DescGalaxyID.tolist())
-    df2=df[['DescGalaxyID', 'Starmass', 'BHmass', 'DMmass', 'Gasmass', 'M200', 'R200']]
-    df2=df2.drop_duplicates(subset='DescGalaxyID')
-    node_attr=df2.set_index('DescGalaxyID').to_dict('index')
-    nx.set_node_attributes(G, node_attr)
-    for mass_type in ['BHmass', 'DMmass']:
-        merger=[]
+def findmergers(dfall):
+    dfall=dfall[['z', 'ProjGalaxyID', 'DescID', 'DescGalaxyID', 'Starmass', 'BHmass', 'DMmass', 'Gasmass', 'M200', 'R200']]
+    for galaxyid in dfall.ProjGalaxyID.unique():
+        df=dfall[dfall.ProjGalaxyID==galaxyid]
+        G=nx.from_pandas_edgelist(df=df, source='DescGalaxyID', target='DescID', create_using=nx.DiGraph)
+        G.add_nodes_from(nodes_for_adding=df.DescGalaxyID.tolist())
+        df2=df[['DescGalaxyID', 'Starmass', 'BHmass', 'DMmass', 'Gasmass']]
+        df2=df2.drop_duplicates(subset='DescGalaxyID')
+        node_attr=df2.set_index('DescGalaxyID').to_dict('index')
+        nx.set_node_attributes(G, node_attr)
+        for mass_type in ['BHmass', 'DMmass']:
+            merger=[]
+            for node1 in G.nodes:
+                pred=list(G.predecessors(node1))
+                if len(pred)>1:
+                    masses=[]
+                    for predecessors in G.predecessors(node1):
+                        masses.append(G.nodes[predecessors][mass_type])
+                    merg=divide(sorted(masses, reverse=True)[1],max(masses))
+                else:
+                    merg=np.nan
+                merger.append(merg)
+            merg_dict={n:m for n,m in zip(list(G.nodes()), merger)}
+            nx.set_node_attributes(G, merg_dict, mass_type+'mergerfrac')
+            print('set node'+mass_type)
+
+        Starmerger=[]
+        Gasmerger=[]
+        Stargas=[]
         for node1 in G.nodes:
             pred=list(G.predecessors(node1))
             if len(pred)>1:
-                masses=[]
+                Gasmasses=[]
+                Starmasses=[]
                 for predecessors in G.predecessors(node1):
-                    masses.append(G.nodes[predecessors][mass_type])
-                merg=divide(min(masses),max(masses))
+                    Starmasses.append(G.nodes[predecessors]['Starmass'])
+                    Gasmasses.append(G.nodes[predecessors]['Gasmass'])
+                starmerg=divide(sorted(Starmasses, reverse=True)[1],max(Starmasses))
+                gasmerg=divide(sorted(Gasmasses, reverse=True)[1],max(Gasmasses))
+                stargas=divide(np.sum(Gasmasses), np.sum(Starmasses))
             else:
-                merg=np.nan
-            merger.append(merg)
-        merg_dict={n:m for n,m in zip(list(G.nodes()), merger)}
-        nx.set_node_attributes(G, merg_dict, mass_type+'mergerfrac')
-        print('set node'+mass_type)
+                starmerg=np.nan
+                gasmerg=np.nan
+                stargas=np.nan
+            Starmerger.append(starmerg)
+            Gasmerger.append(gasmerg)
+            Stargas.append(stargas)
 
-    Starmerger=[]
-    Gasmerger=[]
-    Stargas=[]
-    for node1 in G.nodes:
-        pred=list(G.predecessors(node1))
-        if len(pred)>1:
-            Gasmasses=[]
-            Starmasses=[]
-            for predecessors in G.predecessors(node1):
-                Starmasses.append(G.nodes[predecessors]['Starmass'])
-                Gasmasses.append(G.nodes[predecessors]['Gasmass'])
-            starmerg=divide(min(Starmasses),max(Starmasses))
-            gasmerg=divide(min(Gasmasses),max(Gasmasses))
-            stargas=divide(np.sum(Gasmasses), np.sum(Starmasses))
-        else:
-            starmerg=np.nan
-            gasmerg=np.nan
-            stargas=np.nan
-        Starmerger.append(starmerg)
-        Gasmerger.append(gasmerg)
-        Stargas.append(stargas)
+        merg_dict={n:m for n,m in zip(list(G.nodes()), Starmerger)}
+        nx.set_node_attributes(G, merg_dict, 'Starmassmergerfrac')
+        print('set node starmass')
 
-    merg_dict={n:m for n,m in zip(list(G.nodes()), Starmerger)}
-    nx.set_node_attributes(G, merg_dict, 'Starmassmergerfrac')
-    print('set node starmass')
+        merg_dict={n:m for n,m in zip(list(G.nodes()), Gasmerger)}
+        nx.set_node_attributes(G, merg_dict, 'Gasmassmergerfrac')
+        print('set node gas mass')
 
-    merg_dict={n:m for n,m in zip(list(G.nodes()), Gasmerger)}
-    nx.set_node_attributes(G, merg_dict, 'Gasmassmergerfrac')
-    print('set node gas mass')
+        merg_dict={n:m for n,m in zip(list(G.nodes()), Stargas)}
+        nx.set_node_attributes(G, merg_dict, 'Stargasmergerfrac')
 
-    merg_dict={n:m for n,m in zip(list(G.nodes()), Stargas)}
-    nx.set_node_attributes(G, merg_dict, 'Stargasmergerfrac')
-    print('set node gas star')
+        print('set node gas star')
+        df.append(df2, ignore_index=True)
+        df3=pd.DataFrame.from_dict(G.nodes(), orient='index')
+        df3['DescGalaxyID']=df3.index
+        df3=df3[['DescGalaxyID', 'Starmassmergerfrac',  'BHmassmergerfrac',  'DMmassmergerfrac',  'Gasmassmergerfrac', 'Stargasmergerfrac']]
+        dfall=pd.merge(dfall, df3, on=['DescGalaxyID'], how='left', inplace='True')
 
-    df3=pd.DataFrame.from_dict(G.nodes(), orient='index')
-    df3['DescGalaxyID']=df3.index
-    df3=df3[['DescGalaxyID', 'Starmassmergerfrac',  'BHmassmergerfrac',  'DMmassmergerfrac',  'Gasmassmergerfrac', 'Stargasmergerfrac', 'M200', 'R200']]
-    print(df3)
-    return df3
+    #dftot['DescGalaxyID']=dftot.index
+    dfall=dfall[['DescGalaxyID', 'Starmassmergerfrac',  'BHmassmergerfrac',  'DMmassmergerfrac',  'Gasmassmergerfrac', 'Stargasmergerfrac', 'M200', 'R200']]
+    print(dfall)
+    return dfall
+
+def mergers(df):
+    df[['Starmassmergerfrac',  'BHmassmergerfrac',  'DMmassmergerfrac',  'Gasmassmergerfrac', 'Stargasmergerfrac']]=df.apply(lambda x: find(x.ProjGalaxyID, x.DescGalaxyID, df), axis=1)
+    return df
+
+def find(galaxyid, node1, df):  
+    temp=df[df.ProjGalaxyID==galaxyid]
+    G=nx.from_pandas_edgelist(df=temp, source='DescGalaxyID', target='DescID', create_using=nx.DiGraph)
+    G.add_nodes_from(nodes_for_adding=temp.DescGalaxyID.tolist())
+    temp=temp.drop_duplicates(subset='DescGalaxyID')
+    temp=temp[['DescGalaxyID', 'Starmass', 'BHmass', 'DMmass', 'Gasmass']]
+    temp=temp.drop_duplicates(subset='DescGalaxyID')
+    node_attr=temp.set_index('DescGalaxyID').to_dict('index')
+    nx.set_node_attributes(G, node_attr)
+    pred=list(G.predecessors(node1))
+
+    if len(pred)>1:
+        Gasmasses=[]
+        Starmasses=[]
+        BHmasses=[]
+        DMmasses=[]
+        for predecessor in G.predecessors(node1):
+            Stardeep=[]
+            Gasdeep=[]
+            BHdeep=[]
+            DMdeep=[]
+            for nextneighbour in G.predecessors(predecessor):
+                Stardeep.append(G.nodes[nextneighbour]['Starmass'])
+                Gasdeep.append(G.nodes[nextneighbour]['Gasmass'])
+                BHdeep.append(G.nodes[nextneighbour]['BHmass'])
+                DMdeep.append(G.nodes[nextneighbour]['DMmass'])
+
+            Stardeep.append(G.nodes[predecessor]['Starmass'])
+            Gasdeep.append(G.nodes[predecessor]['Gasmass'])
+            BHdeep.append(G.nodes[predecessor]['BHmass'])
+            DMdeep.append(G.nodes[predecessor]['DMmass'])
+
+            Starmasses.append(max(Stardeep))
+            Gasmasses.append(max(Gasdeep))
+            BHmasses.append(max(BHdeep))
+            DMmasses.append(max(DMdeep))
+            
+        starmerg=divide(sorted(Starmasses, reverse=True)[1],max(Starmasses))
+        gasmerg=divide(sorted(Gasmasses, reverse=True)[1],max(Gasmasses))
+        BHmerg=divide(sorted(BHmasses, reverse=True)[1],max(BHmasses))
+        DMmerg=divide(sorted(DMmasses, reverse=True)[1],max(DMmasses))
+        stargas=divide(np.sum(Gasmasses), np.sum(Starmasses))
+    else:
+        starmerg=np.nan
+        gasmerg=np.nan
+        BHmerg=np.nan
+        DMmerg=np.nan
+        stargas=np.nan
+    print(starmerg)
+    return pd.Series([starmerg, gasmerg, BHmerg, DMmerg, stargas])
 
 def drop_numerical_outliers(df, z_thresh):
     constrains=df.select_dtypes(include=[np.number]).apply(lambda x: np.abs(stats.zscore(x)) <z_thresh).all(axis=1)
@@ -606,8 +666,8 @@ if __name__ == "__main__":
     sim_names=['RefL0050N0752']
     for sim_name in sim_names:
         read_all_data =False
-        read_main_branch_data=False
-        read_all_branch_data=False
+        read_main_branch_data=True
+        read_all_branch_data=True
         if(read_all_data):
             print('........reading all data.......')
             df=pd.read_csv('evolvingEAGLEbulgediscmergedf'+sim_name+'.csv')
@@ -656,15 +716,20 @@ if __name__ == "__main__":
             if(read_all_branch_data):
                 print('........reading merger data.......')
                 mergedf=pd.read_csv('evolvingEAGLEmergerdf'+sim_name+'.csv')
+                mergedf=mergedf[['DescGalaxyID', 'Starmassmergerfrac',  'BHmassmergerfrac',  'DMmassmergerfrac',  'Gasmassmergerfrac', 'Stargasmergerfrac']]
             else:
                 print('........writing merger data.......')
                 df=pd.read_csv('evolvingEAGLEimagesallbranchesdf'+sim_name+'.csv')
                 print(df)
-                mergedf=findmergers(df)
+                df=df[df.Starmass>1e5]
+                mergedf=mergers(df)
                 #mergedf=pd.merge(df, mergerdf, on=['DescGalaxyID'], how='left').drop_duplicates()
                 mergedf.to_csv('evolvingEAGLEmergerdf'+sim_name+'.csv')
-            
-            df= pd.merge(bulgedf, mergedf, on=['DescGalaxyID'], how='left').drop_duplicates()
+                
+            df2= pd.merge(bulgedf, mergedf, on=['DescGalaxyID'], how='left').drop_duplicates()
+            dfAP=df=pd.read_csv('aperturemainbranchdf'+sim_name+'.csv')
+            dfAP=dfAP[['DescGalaxyID','Starmass1', 'Gasmass1','SFR1','Starmass3','Gasmass3','SFR3', 'Starmass10', 'Gasmass10','SFR10']]
+            df= pd.merge(df2, dfAP, on=['DescGalaxyID'], how='left').drop_duplicates()
             df.to_csv('evolvingEAGLEbulgediscmergedf'+sim_name+'.csv')
             print(df.columns.values)
             print(df[['z', 'Starmassmergerfrac']])

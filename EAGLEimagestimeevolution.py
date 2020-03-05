@@ -93,6 +93,7 @@ def getdata(mySims, querytype):
                     AP.Mass_Star as Starmass, \
                     AP.Mass_BH as BHmass, \
                     SH.MassType_DM as DMmass,\
+                    SH.MassType_Star as SHStarmass,\
                     FOF.Group_M_Crit200 as M200, \
                     FOF.Group_R_Crit200 as R200, \
                     AP.Mass_Gas as Gasmass\
@@ -102,9 +103,9 @@ def getdata(mySims, querytype):
                     %s_FOF as FOF, \
                     %s_Aperture as AP \
                 WHERE \
+                    ref.SnapNum=28 and \
                     ref.MassType_Star between 1.0e10 and 1.0e11 and \
                     ref.StarFormationRate between 0.1 and 15 and \
-                    ref.SnapNum=28 and \
                     SH.GalaxyID between ref.GalaxyID and ref.LastProgID and \
                     SH.GalaxyID = AP.GalaxyID and \
                     FOF.GroupID = SH.GroupID and \
@@ -114,7 +115,7 @@ def getdata(mySims, querytype):
                     ref.GalaxyID, \
                     SH.Redshift"%(sim_name, sim_name, sim_name, sim_name)
             myData = sql.execute_query(con , Query)
-            df=pd.DataFrame(myData, columns=['ProjGalaxyID','DescGalaxyID','DescID','z','Starmass', 'BHmass','DMmass','M200','R200','Gasmass'])
+            df=pd.DataFrame(myData, columns=['ProjGalaxyID','DescGalaxyID','DescID','z','Starmass', 'BHmass','DMmass','SHStarmass','M200','R200','Gasmass'])
             df.to_csv('evolvingEAGLEimages'+querytype+'df'+sim_name+'.csv')
     
 
