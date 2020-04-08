@@ -83,35 +83,27 @@ def getdata(mySims, querytype):
 
         elif querytype=='data':
             myQuery = "SELECT \
-                            SH.Redshift as z, \
                             SH.Image_Face as face, \
-                            SH.MassType_Star as StarmassType \
+                            SH.SF_Mass as SFMass, \
+                            SH.NSF_Mass as NSFMass \
                         FROM \
-                            %s_Subhalo as SH, \
-                            %s_Aperture as AP, \
-                            %s_MorphoKinem as MK, \
-                            %s_FOF as FOF \
+                            %s_Subhalo as SH \
                         WHERE \
-                            SH.GalaxyID = AP.GalaxyID and \
-                            SH.GalaxyID = MK.GalaxyID and \
-                            FOF.GroupID = SH.GroupID and \
                             SH.StarFormationRate between 0.1 and 15 and \
-                            AP.ApertureSize = 30 and \
                             SH.MassType_Star between 1.0e10 and 1.0e11 and \
                             SH.SnapNum=28 and\
                             SH.Image_face IS NOT null\
                         ORDER BY \
-                            AP.Mass_Star"%( sim_name , sim_name, sim_name, sim_name)
+                            SH.MassType_Star"%( sim_name)
 
             myData = sql.execute_query (con , myQuery)
-            df=pd.DataFrame(myData, columns=['z','face','StarmassType'])
+            df=pd.DataFrame(myData, columns=['face','SFMass','NSFMass'])
             
             df['face']=  df['face'].str.decode("utf-8")
             df['face']=df['face'].str.replace('"<img src=', '').str.replace('>"', '').str.replace("'",'')
             df=df.assign(name1 = lambda x: x.face)
             df['name1']=df['name1'].str.replace('http://virgodb.cosma.dur.ac.uk/eagle-webstorage/'+sim_name+'_Subhalo/', '')
             df=df.assign(filename = lambda x: sim_name +'' + x.name1)
-            
             df.to_csv('EAGLEextradatadf'+sim_name+'.csv')
             print('datadownloaded')
 

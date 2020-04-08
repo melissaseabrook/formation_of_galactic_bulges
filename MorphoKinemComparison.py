@@ -13,6 +13,7 @@ from scipy import stats
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm
 import matplotlib.colors as mcol
+import matplotlib.ticker as ticker
 from mpl_toolkits.mplot3d import axes3d
 from scipy.interpolate import griddata, UnivariateSpline
 import statmorph
@@ -273,22 +274,25 @@ def twoDsersicfit(image, i_e, r_e, guess_n, center):
         fit_sersic = fitting.LevMarLSQFitter()
         sersic_model = fit_sersic(sersicinit, x, y, z, maxiter=500, acc=1e-5)
         nd=sersic_model.n.value
-        #sim=sersic_model(x,y)
+        sim=sersic_model(x,y)
         #=ma.log10(image)
         #logimg=logimg.filled(0)
         #logsim=ma.log10(sim)
         #logsim=logsim.filled(0)
         #res = logx(np.sum(np.abs(logimg - logsim)))
         #nd_error=np.sqrt(res)
-        nd_error=np.nan
+        res = (np.abs(blur - sim))
+        n2d_error=np.sqrt(np.sum(res)/nx*ny)
     except:
         nd=np.nan
-        nd_error=np.nan
-    return nd, nd_error
+        n2d_error=np.nan
+    return nd, n2d_error
 
 def findsersicindex(image, bindex, dindex):
     image2=np.average(image, axis=2, weights=[0.2126,0.587,0.114])
     asymm, asymmerror=findassymetry(image2)
+
+    
     try:
         maxVal, center = findcenter(image)
         rad, r_arr,stdbins, nr=radial_profile(image,center)
@@ -308,15 +312,21 @@ def findsersicindex(image, bindex, dindex):
         bindex=int(bindex)
         dindex=int(dindex)
         bdindex=int((bindex+dindex)/2)
+
         
-        n1, pcov1 = curve_fit(lambda x,n: SersicProfile(x, i_e, r_e, n), r, rad, p0=3, bounds=(0.0001,10), sigma=stdbins, absolute_sigma=True)
+        
+        n1, pcov1 = curve_fit(lambda x,n: SersicProfile(x, i_e, r_e, n), r, rad, p0=2, bounds=(0.1,10), sigma=stdbins, absolute_sigma=True)
         print("I_e={}, R_e={}, n_disc={}".format(i_e, r_e, n1))
         n_total=n1[0]
         res= np.abs(rad - SersicProfile(r, i_e,r_e,n_total))
         n_total_error=np.sqrt(sum((res[bindex:bdindex]/stdbins[bindex:bdindex])**2))
+        n_total_error1=np.sqrt(pcov1[0])
 
-        n2d, n2d_error=twoDsersicfit(image2, i_e, r_e, n_total, center)
-
+        try:
+            n2d, n2d_error=twoDsersicfit(image2, i_e, r_e, n_total, center)
+        except:
+            n2d=np.nan
+            n2d_error=np.nan
 
         poptdisca, pcovdisca=curve_fit(SersicProfilea, r[bindex:dindex], rad[bindex:dindex], p0=(i_e, r_e, 1,0), bounds=((i_e-0.5,r_e-0.1,0.1,0), (i_e+0.5,r_e+0.1,2,20)), sigma=stdbins[bindex:dindex], absolute_sigma=True)
         n_disca=poptdisca[2]
@@ -362,17 +372,15 @@ def findsersicindex(image, bindex, dindex):
         n_bulge_exp_error=np.sqrt(sum((res[bindex:bdindex]/stdbins[bindex:bdindex])**2))
 
         print("n_bulge={}".format(n_bulge_exp))
-
-
     except:
         n_total=np.nan
-        n2d=np.nan
         n_bulge=np.nan
         n_disc=np.nan
         n_bulgea=np.nan
         n_disca=np.nan
         n_bulge_exp=np.nan
         n_total_error=np.nan
+        n_total_error1=np.nan
         n_bulge_error=np.nan
         n_disc_error=np.nan
         n_bulgea_error=np.nan
@@ -381,7 +389,12 @@ def findsersicindex(image, bindex, dindex):
         con=np.nan
         r80=np.nan
         r20=np.nan
-    return n_total, n2d, n_disca, n_bulgea, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disca_error, n_bulgea_error, n_disc_error, n_bulge_error, n_bulge_exp_error, con, r80, r20, asymm, asymmerror
+        try:
+            n2d, n2d_error=twoDsersicfit(image2, 100, 7, 1.5, (128,128))
+        except:
+            n2d=np.nan
+            n2d_error=np.nan
+    return n_total, n2d,n2d_error, n_disca, n_bulgea, n_disc, n_bulge, n_bulge_exp, n_total_error,n_total_error1, n_disca_error, n_bulgea_error, n_disc_error, n_bulge_error, n_bulge_exp_error, con, r80, r20, asymm, asymmerror
 
 def runstatmorph(image):
     image2=np.average(image, axis=2, weights=[0.2126,0.587,0.114])
@@ -542,40 +555,89 @@ def threeDplot(df, x,y,z, column_size, column_colour):
 
     plt.show()
 
-def colorbarplot(df, x,y, column_size, column_colour, column_marker):
+def colorbarplot(df, x,y, column_size, column_colour, column_marker, xname, yname, colourname):
     Norm=mcol.DivergingNorm(vmin=df[column_colour].min(), vcenter=df[column_colour].median(), vmax=df[column_colour].max())
-    Cmap=mcol.LinearSegmentedColormap.from_list("cmop", ['red','mediumorchid','blue'])
+    #Cmap=mcol.LinearSegmentedColormap.from_list("cmop", ['red','mediumorchid','blue'])
+    Cmap='Autumn'
     df['marker_bin']=pd.qcut(df.Z, [0,0.15,0.85,1], labels=['low','okay','high'])
     markers={"low":'^', "okay":'o', 'high':'s'}
     sm=plt.cm.ScalarMappable(cmap=Cmap, norm=Norm)
     sm.set_array([])
-    ax=sns.relplot(x=x, y=y, size=column_size, sizes=(10,150), hue=column_colour, palette=Cmap, style='marker_bin', markers=markers,data=df)
+    ax=sns.relplot(x=x, y=y, size=column_size, sizes=(10,100), hue=column_colour, palette=Cmap, style='marker_bin', markers=markers,data=df)
     ax._legend.remove()
-    ax.fig.colorbar(sm).set_label(column_colour)
+    ax.set(xlabel=xname, ylabel=yname)
+    ax.fig.colorbar(sm).set_label(colourname)
     plt.subplots_adjust(top=0.9)
-    ax.fig.suptitle(''+x+' vs '+y+', coloured by'+column_colour+', sized by'+column_size+', shaped by'+column_marker+'')
+    #ax.fig.suptitle(''+x+' vs '+y+', coloured by'+column_colour+', sized by'+column_size+', shaped by'+column_marker+'')
     ax.savefig('galaxygraphsbin'+sim_name+'/'+x+'vs'+y+'2.png')
     plt.show()
 
-def stackedhistogram(df, param1, param2, param3, param4, param5):
+def stackedhistogram(df, param1, param2, param3, param5):
     plt.subplot(211)
-    colors1=['yellow','r','blue','green','purple']
-    colors2=['r','blue','green','purple']
-    labels=[param5, param1, param2, param3, param4]
+    colors1=['yellow','r','blue','green']
+    colors2=['r','blue','green']
+    labels=[param5, param1, param2, param3]
     plt.title('Histograms of Sersic Indices and Errors')
-    plt.hist([df[param5], df[param1],df[param2],df[param3],df[param4]], bins=50, histtype='step', stacked=True, fill=False, color=colors1, label=labels)
+    plt.hist([df[param5], df[param1],df[param2],df[param3]], bins=20,  color=colors1, label=labels)
     plt.xlabel('Sersic Index')
     plt.legend()
     
-    df[df.n_disc_error>20]=np.nan
-    df[df.n_bulge_error>20]=np.nan
-    df[df.n_bulge_exp_error>20]=np.nan
+    df[df.n_total_error>10]=np.nan
+    df[df.n_disc_error>12]=np.nan
+    df[df.n_bulge_error>12]=np.nan
     
     plt.subplot(212)
-    plt.hist([df[param1+'_error'],df[param2+'_error'],df[param3+'_error'],df[param4+'_error']], bins=20, histtype='step', stacked=True, fill=False, color=colors2, label=labels)
+    plt.hist([df[param1+'_error'],df[param2+'_error'],df[param3+'_error']], bins=20,color=colors2, label=labels)
     plt.xlabel('Error')
     plt.tight_layout()
-    plt.savefig('galaxygraphsbin'+sim_name+'/histogramof'+param1+param2+param3+param4+param5+'.png')
+    plt.savefig('galaxygraphsbin'+sim_name+'/histogramof'+param1+param2+param3+param5+'.png')
+    plt.show()
+
+def disthistogram(df, param1, param2, param3, param4, name1,name2,name3,name4):
+    fig, axs =plt.subplots(2,1)
+    colors1=['yellow','r','blue','green']
+    colors2=['r','blue','green']
+    labels=[param1, param2, param3,param4]
+    df[df.n_disc>6]=np.nan
+    names=[name1,name2,name3,name4]
+    for i,param in enumerate(labels):
+        print(param)
+        temp=df[df[param]>0.1]
+        temp['n1total']=df.apply(lambda x: x.n1total +1, axis=1)
+        temp['n2d']=df.apply(lambda x: x.n2d +1, axis=1)
+        temp['n_disc']=df.apply(lambda x: x.n_disc +1, axis=1)
+        temp['n_bulge']=df.apply(lambda x: x.n_bulge +1, axis=1)
+        sns.distplot(temp[param], label=names[i], ax=axs[0], hist=False, kde=True, norm_hist=True)
+    axs[0].set_xlabel(r'Sersic Index')
+    axs[0].set_ylabel('Count')
+    axs[0].legend()
+    axs[0].set_xlim(1,8)
+    axs[0].yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos:('%g') % (x * 50)))
+    axs[0].xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos:('%g') % (x -1)))
+
+
+    df[df.n_total_error>8]=np.nan
+    df[df.n_disc_error>8]=np.nan
+    df[df.n_bulge_error>8]=np.nan
+    
+    for param in labels:
+        temp=df[df[param+'_error']>0]
+        temp['n1total_error']=df.apply(lambda x: x.n1total_error +1, axis=1)
+        temp['n2d_error']=df.apply(lambda x: x.n2d_error +1, axis=1)
+        temp['n_disc_error']=df.apply(lambda x: x.n_disc_error +1, axis=1)
+        temp['n_bulge_error']=df.apply(lambda x: x.n_bulge_error +1, axis=1)
+        sns.distplot(temp[param+'_error'], ax=axs[1], hist=False,  kde=True, norm_hist=True)
+        #sns.distplot(temp[param+'_error'], hist=False, norm_hist=False, kde=False)
+    axs[1].set_xlabel('Error')
+    axs[1].set_ylabel('Count')
+    axs[1].set_xlim(1,10)
+    axs[1].xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos:('%g') % (x -1)))
+    axs[1].yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos:('%g') % (x * 50)))
+    #locs, labels = axs[1].get_xticks()
+    #labels = [60*j for j in locs]
+    #axs[1].set_xticks(locs, labels)
+    plt.tight_layout()
+    plt.savefig('galaxygraphsbin'+sim_name+'/histogramof'+param1+param2+param3+param4+'.png')
     plt.show()
 
 def subplothistograms(df, param1, param2, param3, param4, param5, param6):
@@ -662,20 +724,11 @@ def colourscatter(df,x,y, column_colour, thresh):
     #create pdf
     N=len(df)
     n=int(N/20)
-    py,y1=np.histogram(df[y], bins=n)
-    y1=y1[:-1]+(y1[1]-y1[0])/2
-    f=UnivariateSpline(y1,py,s=n)
-    axleft.plot(f(y1), y1)
-
-    px,x1=np.histogram(df[x], bins=n)
-    x1=x1[:-1]+(x1[1]-x1[0])/2
-    f=UnivariateSpline(x1,px,s=n)
-    axtop.plot(x1, f(x1))
 
     axleft.set_xlabel('PDF')
     axtop.set_ylabel('PDF')
-    axleft.set_ylabel(y)
-    ax1.set_xlabel(x)
+    axleft.set_ylabel(r'log(SFR) [$M_{\odot}Gyr^{-1}$]')
+    ax1.set_xlabel(r'$log(M_{gas})  [M_{\odot}])$')
 
     ax1.scatter(df[x],df[y], c=df[column_colour], cmap=Cmap, norm=Norm, alpha=0.5, s=10)
     lowdf=df[df[column_colour]<thresh -0.1]
@@ -686,6 +739,17 @@ def colourscatter(df,x,y, column_colour, thresh):
         medianvals, binedgs, lowquart, uppquart, std=binvalue(df, x, y, 10)
         ax1.errorbar(binedgs, medianvals, color=cs[i], yerr=(std), fmt='', capsize=0.5, elinewidth=0.5)
 
+        py,y1=np.histogram(df[y], bins=n)
+        y1=y1[:-1]+(y1[1]-y1[0])/2
+        f=UnivariateSpline(y1,py,s=n)
+        axleft.plot(f(y1), y1, color=cs[i])
+
+        px,x1=np.histogram(df[x], bins=n)
+        x1=x1[:-1]+(x1[1]-x1[0])/2
+        f=UnivariateSpline(x1,px,s=n)
+        axtop.plot(x1, f(x1), color=cs[i])
+
+
     plt.subplots_adjust(right=0.8, wspace=0, hspace=0)
     cbar_ax=fig.add_axes([0.85,0.15,0.05,0.8])
     sm=plt.cm.ScalarMappable(cmap=Cmap, norm=Norm)
@@ -695,8 +759,55 @@ def colourscatter(df,x,y, column_colour, thresh):
     plt.savefig('galaxygraphsbin'+sim_name+'/plot'+x+''+y+'colouredby'+column_colour+'.png')
     plt.show()
 
+def threshtonan(x, thresh):
+    if x<thresh:
+        return np.nan
+    else:
+        return x
+
+def threshtonanupper(x, thresh):
+    if x>thresh:
+        return np.nan
+    else:
+        return x
+
+def extract_val(x):
+    try:
+        return x[1:7]
+    except:
+        return np.nan
+
 def plotbulgetodisc(df, sim_name):
     print(df.columns.values)
+    df['sSFR']=df.apply(lambda x: divide(x.SFR,x.Starmass), axis=1)
+    df['logsSFR']=df.apply(lambda x: logx(x.sSFR), axis=1)
+    #print(df.n_total_error1.value)
+
+    df['n2d_error']=df.apply(lambda x: x.n2d_error/(256*2), axis=1)
+    df['n1total']=df.apply(lambda x: x.n_total, axis=1)
+    df['n1total_error']=df.apply(lambda x: extract_val(x.n_total_error1), axis=1)
+    df['n1total_error']= df['n1total_error'].astype(float)
+    df['n1total_error']=df.apply(lambda x: x.n1total_error*50, axis=1)
+    df=df[df.n2d_error<1]
+    df=df[df.n_total>0]
+    df=df[df.n2d>0]
+    df=df[df.logsSFR<0]
+    df=df[df.asymm<0.3]
+
+    colorbarplot(df, 'btdradius', 'BulgeToTotal', 'logmass', 'logsSFR', 'logBHmass', r'$r_{bulge} / r_{disc}$', 'BulgeToTotal',r'log(sSFR) [$yr^{-1}$]')
+    colorbarplot(df, 'btdintensity', 'BulgeToTotal', 'logmass', 'logsSFR', 'logBHmass', r'$I_{bulge} / I_{disc}$', 'BulgeToTotal',r'log(sSFR) [$yr^{-1}$]')
+    exit()
+
+    disthistogram(df, 'n1total', 'n2d', 'n_disc', 'n_bulge', r'$n_{1d}$', r'$n_{2d}$',r'$n_{disc}$',r'$n_{bulge}$' )
+    
+    #colourscatter(ndf, 'asymm','n_total_error','n_total', 1.5)
+    #colourscatter(ndf, 'asymm','n1total_error','n_total', 1.5)
+    #colourscatter(n2df, 'asymm','n2d_error','n2d', 1.5)
+    exit()
+
+    df['loggas']=df.apply(lambda x: logx(x.Gasmass), axis=1)
+    df['sgas']=df.apply(lambda x: divide(x.Gasmass,x.Starmass), axis=1)
+    df['logsgas']=df.apply(lambda x: logx(x.sgas), axis=1)
     df['sDMmassType']=df.apply(lambda x: divide(x.StarmassType,x.DMmass), axis=1)
     df['logsDMmassType']=df.apply(lambda x: logx(x.sDMmassType), axis=1)
     df['sBHmass']=df.apply(lambda x: divide(x.BHmass,x.Starmass), axis=1)
@@ -708,13 +819,31 @@ def plotbulgetodisc(df, sim_name):
     df=df[df.logDMmass>11]
     df['sSFR']=df.apply(lambda x: divide(x.SFR,x.Starmass), axis=1)
     df['logsSFR']=df.apply(lambda x: logx(x.sSFR), axis=1)
+
+    df['n_total']=df.apply(lambda x: threshtonan(x.n_total, 0.4), axis=1)
+    df['n_disc']=df.apply(lambda x: threshtonan(x.n_disc, 0.1), axis=1)
+    df['n_bulge']=df.apply(lambda x: threshtonan(x.n_disc, 0.4), axis=1)
+    df['n_bulge_exp']=df.apply(lambda x: threshtonan(x.n_disc, 0.1), axis=1)
+    df['n2d']=df.apply(lambda x: threshtonan(x.n_disc, 0.4), axis=1)
+
+    df['n_total']=df.apply(lambda x: threshtonanupper(x.n_total, 5), axis=1)
+    df['n_disc']=df.apply(lambda x: threshtonanupper(x.n_disc, 4), axis=1)
+    df['n_bulge']=df.apply(lambda x: threshtonanupper(x.n_disc, 6), axis=1)
+    df['n_bulge_exp']=df.apply(lambda x: threshtonanupper(x.n_disc, 5), axis=1)
+    df['n2d']=df.apply(lambda x: threshtonanupper(x.n_disc, 5), axis=1)
+
     df=df[df.logsSFR<0]
     df=df[df.logsSFR>-12]
     n2df=df[df.n2d>0.5]
     ndf=df[df.n_total>0.5]
     n2ndf=ndf[ndf.n2d>0.5]
     
-    
+    #stackedhistogram(df, 'n_total','n_disc','n_bulge', 'n2d')
+    colourscatter(ndf, 'gas','sSFR','n2d', 1.4)
+    colourscatter(ndf, 'sgas','sSFR','n_total', 1.4)
+    #colourscatter(ndf, 'logmass','logsSFR','n_total', 1.5)
+    #colourscatter(ndf, 'logmass','logsSFR','BulgeToTotal', 0.5)
+    exit()
     #vdf=df.dropna(subset=['vHsqrd'])
     #vdf=vdf[vdf.vHsqrd<40]
     #n2dvdf=vdf[vdf.n2d>0]
@@ -881,7 +1010,7 @@ def plotbulgetodisc(df, sim_name):
 
 if __name__ == "__main__":
     sim_name='RefL0050N0752'
-    read_all_data=True
+    read_all_data=False
     read_extra_data=True
     read_image_data=False
     if(read_all_data):
@@ -895,12 +1024,12 @@ if __name__ == "__main__":
             for filename in df['filename']:
                 BGRimage=cv2.imread('galaxyimagebin'+sim_name+'/'+filename)
                 btdradius, btdintensity, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius =findandlabelbulge(BGRimage, filename, sim_name)
-                n_total, n2d, n_disca, n_bulgea, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disca_error, n_bulgea_error, n_disc_error, n_bulge_error, n_bulge_exp_error, con, r80, r20, asymm, asymmerror=findsersicindex(BGRimage, bradius, hradius)
+                n_total, n2d,n2d_error, n_disca, n_bulgea, n_disc, n_bulge, n_bulge_exp, n_total_error,n_total_error1, n_disca_error, n_bulgea_error, n_disc_error, n_bulge_error, n_bulge_exp_error, con, r80, r20, asymm, asymmerror=findsersicindex(BGRimage, bradius, hradius)
                 #morph_c, morph_asymm, morph_sersic_n, morph_smoothness, morph_sersic_rhalf, morph_xc_asymmetry, morph_yc_asymmetry=runstatmorph(BGRimage)
                 #discbulgetemp.append([filename, btdradius, btdintensity,n_total, n2d, n_disca, n_bulgea, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disca_error, n_bulgea_error, n_disc_error, n_bulge_error, n_bulge_exp_error, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius, con, r80, r20, asymm, morph_c, morph_asymm, morph_sersic_n, morph_smoothness, morph_sersic_rhalf, morph_xc_asymmetry, morph_yc_asymmetry])
-                discbulgetemp.append([filename, btdradius, btdintensity,n_total, n2d, n_disca, n_bulgea, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disca_error, n_bulgea_error, n_disc_error, n_bulge_error, n_bulge_exp_error, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius, con, r80, r20, asymm, asymmerror])
+                discbulgetemp.append([filename, btdradius, btdintensity,n_total, n2d,n2d_error, n_disca, n_bulgea, n_disc, n_bulge, n_bulge_exp, n_total_error,n_total_error1, n_disca_error, n_bulgea_error, n_disc_error, n_bulge_error, n_bulge_exp_error, star_count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius, con, r80, r20, asymm, asymmerror])
             #discbulgedf=pd.DataFrame(discbulgetemp, columns=['filename', 'btdradius', 'btdintensity','n_total','n2d','n_disca','n_bulgea','n_disc','n_bulge','n_bulge_exp', 'n_total_error', 'n_disca_error', 'n_bulgea_error', 'n_disc_error', 'n_bulge_error', 'n_bulge_exp_error', 'star_count', 'discradius', 'bulgeradius', 'disc_intensity', 'bulge_intensity', 'btotalintensity', 'btotalradius', 'con', 'r80', 'r20', 'asymm', 'morph_c', 'morph_asymm', 'morph_sersic_n', 'morph_smoothness', 'morph_sersic_rhalf', 'morph_xc_asymmetry', 'morph_yc_asymmetry'])
-            discbulgedf=pd.DataFrame(discbulgetemp, columns=['filename', 'btdradius', 'btdintensity','n_total','n2d','n_disca','n_bulgea','n_disc','n_bulge','n_bulge_exp', 'n_total_error', 'n_disca_error', 'n_bulgea_error', 'n_disc_error', 'n_bulge_error', 'n_bulge_exp_error', 'star_count', 'discradius', 'bulgeradius', 'disc_intensity', 'bulge_intensity', 'btotalintensity', 'btotalradius', 'con', 'r80', 'r20', 'asymm', 'asymmerror'])
+            discbulgedf=pd.DataFrame(discbulgetemp, columns=['filename', 'btdradius', 'btdintensity','n_total','n2d','n2d_error','n_disca','n_bulgea','n_disc','n_bulge','n_bulge_exp', 'n_total_error','n_total_error1', 'n_disca_error', 'n_bulgea_error', 'n_disc_error', 'n_bulge_error', 'n_bulge_exp_error', 'star_count', 'discradius', 'bulgeradius', 'disc_intensity', 'bulge_intensity', 'btotalintensity', 'btotalradius', 'con', 'r80', 'r20', 'asymm', 'asymmerror'])
             df.filename.astype(str)
             discbulgedf.filename.astype(str)
             df=pd.merge(df, discbulgedf, on=['filename'], how='outer')
