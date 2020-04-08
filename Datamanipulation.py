@@ -23,7 +23,8 @@ import scipy.ndimage as ndi
 from scipy.interpolate import griddata, UnivariateSpline
 import pylab
 import networkx as nx
-from astropy.cosmology import Planck13
+from astropy.cosmology import Planck13, z_at_value
+import astropy.units as u
 import statmorph
 from astropy.modeling import models, fitting
 
@@ -36,6 +37,27 @@ def logx(x):
             return -np.log10(-x)
     else:
         return 0
+
+def cutBHmass(x):
+    if x>0:
+        if x<4.5:
+            return np.nan
+        else:
+            return x
+    else:
+        return x
+
+def threshtonan(x, thresh):
+    if x<thresh:
+        return np.nan
+    else:
+        return x
+
+def threshtonan2(x, y, thresh):
+    if x<thresh:
+        return 0
+    else:
+        return y
 
 def divide(x,y):
     if y !=0:
@@ -534,7 +556,7 @@ def getImage(path):
     return OffsetImage(plt.imread('evolvinggalaxyimagebinmainbranch'+sim_name+'/'+path), zoom=0.15)
 
 def categorise(asymm, param, thresh):
-    if asymm > 0.35:
+    if asymm > 0.3:
         return 'A'
     elif param > thresh:
         return 'B'
@@ -601,7 +623,7 @@ def cleanandtransformdata(df):
 
     df['categoryn']=df.apply(lambda x: categorise(x.asymm, x.n_total, 1.5), axis=1)
     df['categorybt']=df.apply(lambda x: categorise(x.asymm, x.BulgeToTotal, 0.5), axis=1)
-    df['categoryn2d']=df.apply(lambda x: categorise(x.asymm, x.n2d, 1.6), axis=1)
+    df['categoryn2d']=df.apply(lambda x: categorise(x.asymm, x.n2d, 1.4), axis=1)
 
 
     
@@ -659,18 +681,134 @@ def cleanandtransformdata(df):
     return df
 
 def plotbulgetodisc(df, sim_name):
-    print(df.columns.values)
+    pass
 
 
 if __name__ == "__main__":
     sim_names=['RefL0050N0752']
     for sim_name in sim_names:
-        read_all_data =False
-        read_main_branch_data=True
-        read_all_branch_data=True
+        read_all_data =True
+        read_main_branch_data=False
+        read_all_branch_data=False
         if(read_all_data):
             print('........reading all data.......')
             df=pd.read_csv('evolvingEAGLEbulgediscmergedf'+sim_name+'.csv')
+            print(df.columns.values)
+            #exit()
+            """
+            df=df[['ProjGalaxyID','DescGalaxyID', 'DescID', 'z', 'Z', 'face', 'HalfMassRadius', 'VelDisp',
+                    'Starmass', 'BHmass', 'DMmass' ,'Gasmass', 'SFR', 'StellarInitialMass',
+                    'BHAccretionrate', 'Vmax', 'Vmaxradius', 'DiscToTotal', 'DispAnisotropy',
+                    'DMEllipticity', 'StellarEllipticity', 'StellarCoRotKE', 'MedOrbitCircu',
+                    'RotToDispRatio', 'Triaxiality',  'filename', 'image', 'num',
+                    'btdradius', 'btdintensity', 'n_total', 'n2d', 'n2d_error', 'n_disc', 'n_bulge',
+                    'n_bulge_exp', 'n_total_error', 'n_disc_error', 'n_bulge_error',
+                    'n_bulge_exp_error', 'star_count', 'discradius', 'bulgeradius',
+                    'disc_intensity', 'bulge_intensity', 'btotalintensity', 'btotalradius', 'con',
+                    'r80', 'r20', 'asymm', 'asymmerror', 'lbt', 'lbt2', 'zrounded', 'lookbacktime',
+                    'BulgeToTotal', 'logBHmass', 'logDMmass', 'logmass', 'loggasmass', 'sSFR',
+                    'sBHmass', 'sDMmass', 'logSFR', 'logsSFR', 'logsBHmass', 'logsDMmass',
+                    'dtototal', 'dtbradius', 'dtbintensity', 'categoryn', 'categorybt',
+                    'categoryn2d', 'massquantile', 'sSFR_median', 'sSFR_std', 'sSFRpermass',
+                    'logsSFRpermass', 'logsDMmass_median', 'logsDMmass_std', 'sDMmasspermass',
+                    'logsDMmasspermass', 'DMEllipticity_median', 'DMEllipticity_std',
+                    'DMEllipticitypermass', 'logDMEllipticitypermass', 'Starmassmergerfrac',
+                    'BHmassmergerfrac', 'DMmassmergerfrac', 'Gasmassmergerfrac',
+                    'Stargasmergerfrac', 'Starmass1', 'Gasmass1', 'SFR1', 'Starmass3', 'Gasmass3',
+                    'SFR3', 'Starmass10', 'Gasmass10', 'SFR10', 'Starmass5', 'Gasmass5', 'SFR5',
+                    'Starmass20', 'Gasmass20', 'SFR20', 'lbtrounded', 'zplus1',
+                    'Starmergercategory', 'starmasscol', 'DMmergercategory',
+                    'stargasmergercategory', 'stargascol', 'sSFR1', 'logsSFR1', 'sSFR3',
+                    'logsSFR3', 'sSFR5', 'logsSFR5', 'sSFR10', 'logsSFR10', 'sSFR20', 'logsSFR20',
+                    'SFR3m', 'Starmass3m', 'sSFR3m', 'logsSFR3m', 'SFR5m', 'Starmass5m', 'sSFR5m',
+                    'logsSFR5m', 'SFR10m', 'Starmass10m', 'sSFR10m', 'logsSFR10m', 'SFR20m',
+                    'Starmass20m', 'sSFR20m', 'logsSFR20m', 'SFR30m', 'Starmass30m', 'sSFR30m',
+                    'logsSFR30m', 'transtypen2d', 'transtypeBTD',
+                    'SFThermalEnergy', 'NSFThermalEnergy', 'SFMass', 'NSFMass', 'M200DM', 'R200DM',
+                    'DM200density',
+                    'DMHalfMassdensity', 'DMAPdensity', 'DM500density' ,'DM200meandensity',
+                    'logM200DM', 'logM500DM', 'logM200DMmean','logDMMass100AP',
+                    'dlbt', 'dz', 'dBHmassdt', 'dM200DMdt','logDM200density',
+                    'dM500DMdt' , 'logDM500density','dM100APDMdt', 'logDM100APdensity',
+                    'dM200meanDMdt', 'logDM200meandensity','dMDMdt', 'logDMHalfMassdensity', 'dR200DMdt' ,
+                    'dR500DMdt' ,'dR200meanDMdt','dRhalfDMdt', 'residDM200density', 'residDMHalfMassdensity', 
+                    'residDM200meandensity',  'residDMAPdensity',
+                    'logR200DM', 'logR500DM', 'logR200DMmean', 'logDMHalfMassRad','DMMass5','DMMass30']]
+            """
+            dfextra =pd.read_csv('dataextra4df'+sim_name+'.csv')
+            #dfextra=dfextra[['DescGalaxyID','DMMass5','DMMass30']]
+            print(dfextra.columns.values)
+            df= pd.merge(df, dfextra, on=['DescGalaxyID'], how='left').drop_duplicates()
+            
+            """
+            #df['DMmassdtcorrea']=df.apply(lambda x: calchalorate(x.DMmass, x.z, x.dz), axis=1)
+            #df['logDMmassdtcorrea']=df.apply(lambda x: logx(x.DMmassdtcorrea), axis=1)
+            for name in ['DM200density','DMHalfMassdensity','DMAPdensity', 'DM200meandensity']:
+                grouped=df[['z', name]].groupby(['z']).agg({name:['median', 'std']})
+                grouped=grouped.xs(name, axis=1, drop_level=True)
+                df=pd.merge(df, grouped, on=['z'], how='left').drop_duplicates()
+                print(df.columns.values)
+                df=df.rename({'median':name+'_median', 'std':name+'_std'}, axis=1)
+                print(df.columns.values)
+            print(df.DM200density_std)
+            print(df.columns.values)
+            df['residDM200density']=df.apply(lambda x: divide((x.DM200density-x.DM200density_median),x.DM200density_std) , axis=1)
+            df['residDMHalfMassdensity']=df.apply(lambda x: divide((x.DMHalfMassdensity-x.DMHalfMassdensity_median),x.DMHalfMassdensity_std) , axis=1)
+            df['residDM200meandensity']=df.apply(lambda x: divide((x.DM200meandensity-x.DM200meandensity_median),x.DM200meandensity_std) , axis=1)
+            df['residDMAPdensity']=df.apply(lambda x: divide((x.DMAPdensity-x.DMAPdensity_median),x.DMAPdensity_std) , axis=1)
+
+            df=df[['ProjGalaxyID','DescGalaxyID', 'DescID', 'z', 'Z', 'face', 'HalfMassRadius', 'VelDisp',
+                    'Starmass', 'BHmass', 'DMmass' ,'Gasmass', 'SFR', 'StellarInitialMass',
+                    'BHAccretionrate', 'Vmax', 'Vmaxradius', 'DiscToTotal', 'DispAnisotropy',
+                    'DMEllipticity', 'StellarEllipticity', 'StellarCoRotKE', 'MedOrbitCircu',
+                    'RotToDispRatio', 'Triaxiality',  'filename', 'image', 'num',
+                    'btdradius', 'btdintensity', 'n_total', 'n2d', 'n2d_error', 'n_disc', 'n_bulge',
+                    'n_bulge_exp', 'n_total_error', 'n_disc_error', 'n_bulge_error',
+                    'n_bulge_exp_error', 'star_count', 'discradius', 'bulgeradius',
+                    'disc_intensity', 'bulge_intensity', 'btotalintensity', 'btotalradius', 'con',
+                    'r80', 'r20', 'asymm', 'asymmerror', 'lbt', 'lbt2', 'zrounded', 'lookbacktime',
+                    'BulgeToTotal', 'logBHmass', 'logDMmass', 'logmass', 'loggasmass', 'sSFR',
+                    'sBHmass', 'sDMmass', 'logSFR', 'logsSFR', 'logsBHmass', 'logsDMmass',
+                    'dtototal', 'dtbradius', 'dtbintensity', 'categoryn', 'categorybt',
+                    'categoryn2d', 'massquantile', 'sSFR_median', 'sSFR_std', 'sSFRpermass',
+                    'logsSFRpermass', 'logsDMmass_median', 'logsDMmass_std', 'sDMmasspermass',
+                    'logsDMmasspermass', 'DMEllipticity_median', 'DMEllipticity_std',
+                    'DMEllipticitypermass', 'logDMEllipticitypermass', 'Starmassmergerfrac',
+                    'BHmassmergerfrac', 'DMmassmergerfrac', 'Gasmassmergerfrac',
+                    'Stargasmergerfrac', 'Starmass1', 'Gasmass1', 'SFR1', 'Starmass3', 'Gasmass3',
+                    'SFR3', 'Starmass10', 'Gasmass10', 'SFR10', 'Starmass5', 'Gasmass5', 'SFR5',
+                    'Starmass20', 'Gasmass20', 'SFR20', 'lbtrounded', 'zplus1',
+                    'Starmergercategory', 'starmasscol', 'DMmergercategory',
+                    'stargasmergercategory', 'stargascol', 'sSFR1', 'logsSFR1', 'sSFR3',
+                    'logsSFR3', 'sSFR5', 'logsSFR5', 'sSFR10', 'logsSFR10', 'sSFR20', 'logsSFR20',
+                    'SFR3m', 'Starmass3m', 'sSFR3m', 'logsSFR3m', 'SFR5m', 'Starmass5m', 'sSFR5m',
+                    'logsSFR5m', 'SFR10m', 'Starmass10m', 'sSFR10m', 'logsSFR10m', 'SFR20m',
+                    'Starmass20m', 'sSFR20m', 'logsSFR20m', 'SFR30m', 'Starmass30m', 'sSFR30m',
+                    'logsSFR30m', 'transtypen2d', 'transtypeBTD',
+                    'SFThermalEnergy', 'NSFThermalEnergy', 'SFMass', 'NSFMass', 'M200DM', 'R200DM',
+                    'DMHalfMassRad','DMMass100AP', 'M500DM', 'R500DM', 'M200DMmean', 'R200DMmean', 'DM200density',
+                    'DMHalfMassdensity', 'DMAPdensity', 'DM500density' ,'DM200meandensity',
+                    'logM200DM', 'logM500DM', 'logM200DMmean','logDMMass100AP',
+                    'dlbt', 'dz', 'dBHmassdt', 'dM200DMdt','logDM200density',
+                    'dM500DMdt' , 'logDM500density','dM100APDMdt', 'logDM100APdensity',
+                    'dM200meanDMdt', 'logDM200meandensity','dMDMdt', 'logDMHalfMassdensity', 'dR200DMdt' ,
+                    'dR500DMdt' ,'dR200meanDMdt','dRhalfDMdt', 'residDM200density', 'residDMHalfMassdensity', 
+                    'residDM200meandensity',  'residDMAPdensity',
+                    'logR200DM', 'logR500DM', 'logR200DMmean', 'logDMHalfMassRad','DMMass5','DMMass30',
+                    'Concentration5200' ,'Concentration530' ,'Concentration30200']]
+                    
+            #dfAP=pd.read_csv('aperturemainbranchdf'+sim_name+'.csv')
+            #dfAP=dfAP[['DescGalaxyID','Starmass5','Gasmass5','SFR5', 'Starmass20', 'Gasmass20','SFR20']]
+            """
+            
+            print(df.columns.values)
+            """
+            df2['Concentration5200']=df2.apply(lambda x: divide(x.DMMass5,x.M200DM), axis=1)
+            df2['Concentration530']=df2.apply(lambda x: divide(x.DMMass5,x.DMMass30), axis=1)
+            df2['Concentration30200']=df2.apply(lambda x: divide(x.DMMass30,x.M200DM), axis=1)
+            """
+            
+            df.to_csv('evolvingEAGLEbulgediscmergedf'+sim_name+'.csv')
             
         else:
             if(read_main_branch_data):
@@ -728,7 +866,7 @@ if __name__ == "__main__":
                 
             df2= pd.merge(bulgedf, mergedf, on=['DescGalaxyID'], how='left').drop_duplicates()
             dfAP=df=pd.read_csv('aperturemainbranchdf'+sim_name+'.csv')
-            dfAP=dfAP[['DescGalaxyID','Starmass1', 'Gasmass1','SFR1','Starmass3','Gasmass3','SFR3', 'Starmass10', 'Gasmass10','SFR10']]
+            dfAP=dfAP[['DescGalaxyID','Starmass1', 'Gasmass1','SFR1','Starmass3','Gasmass3','SFR3','Starmass5','Gasmass5','SFR5', 'Starmass10', 'Gasmass10','SFR10', 'Starmass20', 'Gasmass20','SFR20']]
             df= pd.merge(df2, dfAP, on=['DescGalaxyID'], how='left').drop_duplicates()
             df.to_csv('evolvingEAGLEbulgediscmergedf'+sim_name+'.csv')
             print(df.columns.values)

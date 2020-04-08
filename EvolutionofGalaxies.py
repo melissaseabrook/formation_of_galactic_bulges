@@ -25,7 +25,8 @@ import scipy.ndimage as ndi
 from scipy.interpolate import griddata, UnivariateSpline
 import pylab
 import networkx as nx
-from astropy.cosmology import Planck13
+from astropy.cosmology import Planck13, z_at_value
+import astropy.units as u
 from astropy import constants as const
 from astropy.modeling import models, fitting
 import statmorph
@@ -43,7 +44,7 @@ def logx(x):
 
 def divide(x,y):
     if y !=0:
-        return x/y
+        return (x)/(y)
     else:
         return 0
 
@@ -77,6 +78,24 @@ def roundx(x, dec=1):
     else: 
         return np.nan
 
+def threshtonan(x, thresh):
+    if x<thresh:
+        return np.nan
+    else:
+        return x
+
+def threshtonan2(x, y, thresh):
+    if x<thresh:
+        return 0
+    else:
+        return y
+
+def cattonan(x, y, cat):
+    if x==cat:
+        return y
+    else:
+        return 0
+
 def drop_numerical_outliers(df, z_thresh):
     constrains=df.select_dtypes(include=[np.number]).apply(lambda x: np.abs(stats.zscore(x)) <z_thresh).all(axis=1)
     df.drop(df.index[~constrains], inplace=True)
@@ -88,139 +107,26 @@ def removeoutlierscolumn(df, column_name, sigma):
 def getImage(path):
     return OffsetImage(plt.imread('evolvinggalaxyimagebinmainbranch'+sim_name+'/'+path), zoom=0.15)
 
-def categorise(asymm, param, thresh):
-    if asymm > 0.35:
+def categorise(asymm, param, thresh, athresh):
+    if asymm > athresh:
         return 'A'
-    elif param > thresh:
+    if param > thresh:
         return 'B'
     else:
         return 'D'
 
-
-    print(df.shape)
-    df.sort_values(['z','ProjGalaxyID'], ascending=[False,True], inplace=True)
-    df['lbt']=df.apply(lambda x: -round(Planck13.lookback_time(x.z).value, 1), axis=1)
-    df['lbt2']=df.apply(lambda x: round(Planck13.lookback_time(x.z).value, 1), axis=1)
-    df['zrounded']=df.apply(lambda x: np.round(x.z, decimals=1), axis=1)
-    df['lookbacktime']=df.apply(lambda x: -(Planck13.lookback_time(x.z).value)*(1e9), axis=1)
-    """
-    df['dlbt']=df.groupby('ProjGalaxyID')['lookbacktime'].diff()
-    df['dSFR']=df.groupby('ProjGalaxyID')['SFR'].diff()
-    df['dBHmass']=df.groupby('ProjGalaxyID')['BHmass'].diff()
-    df['dSIM']=df.groupby('ProjGalaxyID')['StellarInitialMass'].diff()
-    df['dD2T']=df.groupby('ProjGalaxyID')['DiscToTotal'].diff()
-    df['dn_total']=df.groupby('ProjGalaxyID')['n_total'].diff()
-    df['dz']=df.groupby('ProjGalaxyID')['z'].diff()
-    df['dz']=df.apply(lambda x: -x.dz, axis=1)
-    """
-
-    """
-    df['dSFRdz']=df.apply(lambda x: (x.dSFR)/(x.dz), axis=1)
-    df['dBHmassdz']=df.apply(lambda x: (x.dBHmass)/(x.dz), axis=1)
-    df['dSIMdz']=df.apply(lambda x: (x.dSIM)/(x.dz), axis=1)
-    df['dn_totaldz']=df.apply(lambda x: (x.dn_total)/(x.dz), axis=1)
-    df['dD2Tdz']=df.apply(lambda x: (x.dD2T)/(x.dz), axis=1)
-    df['dSFRdt']=df.apply(lambda x: (x.dSFR)/(x.dlbt), axis=1)
-    df['dBHmassdt']=df.apply(lambda x: (x.dBHmass)/(x.dlbt), axis=1)
-    df['dSIMdt']=df.apply(lambda x: (x.dSIM)/(x.dlbt), axis=1)
-    df['dn_totaldt']=df.apply(lambda x: (x.dn_total)/(x.dlbt), axis=1)
-    df['dD2Tdt']=df.apply(lambda x: (x.dD2T)/(x.dlbt), axis=1)
-    """
-
-    #drop_numerical_outliers(df, 3)
-    #df=df=df.reset_index()
-    #print(df.shape)
-    
-    df['num']= df.groupby('ProjGalaxyID')['ProjGalaxyID'].transform('count')
-    print(df.shape)
-    #df=df[df.num>7]
-    print(df.ProjGalaxyID.nunique())
-    df['BulgeToTotal']=df.apply(lambda x: (1-x.DiscToTotal), axis=1)
-    df['logBHmass']=df.apply(lambda x: logx(x.BHmass), axis=1)
-    df['logDMmass']=df.apply(lambda x: logx(x.BHmass), axis=1)
-    df['logmass']=df.apply(lambda x: logx(x.Starmass), axis=1)
-    df['loggasmass']=df.apply(lambda x: logx(x.Gasmass), axis=1)
-    df['sSFR']=df.apply(lambda x: divide(x.SFR,x.Starmass), axis=1)
-    df['sBHmass']=df.apply(lambda x: divide(x.BHmass,x.Starmass), axis=1)
-    df['sDMmass']=df.apply(lambda x: divide(x.Starmass, x.DMmass), axis=1)
-    df['logSFR']=df.apply(lambda x: logx(x.SFR), axis=1)
-    df['logsSFR']=df.apply(lambda x: logx(x.sSFR), axis=1)
-    df['logsBHmass']=df.apply(lambda x: logx(x.sBHmass), axis=1)
-    df['logsDMmass']=df.apply(lambda x: logx(x.sDMmass), axis=1)
-    df['logDMmass']=df.apply(lambda x: logx(x.DMmass), axis=1)
-    df['dtototal']=df.apply(lambda x: (1-x.btdintensity), axis=1)
-    df['dtbradius']=df.apply(lambda x: invertbtd(x.btdradius), axis=1)
-    df['dtbintensity']=df.apply(lambda x: invertbtd(x.btdintensity), axis=1)
-
-    df['categoryn']=df.apply(lambda x: categorise(x.asymm, x.n_total, 1.5), axis=1)
-    df['categorybt']=df.apply(lambda x: categorise(x.asymm, x.BulgeToTotal, 0.5), axis=1)
-    df['categoryn2d']=df.apply(lambda x: categorise(x.asymm, x.n2d, 1.6), axis=1)
-
-    df['massquantile']=pd.qcut(df['logmass'], 5, labels=False)
-    grouped=df[['zrounded','massquantile','sSFR']].groupby(['zrounded','massquantile']).agg({'sSFR':['median', 'std']})
-    grouped=grouped.xs('sSFR', axis=1, drop_level=True)
-    df=pd.merge(df, grouped, on=['zrounded','massquantile'], how='left')
-    df=df.rename({'median':'sSFR_median', 'std':'sSFR_std'}, axis=1)
-    df['sSFRpermass']=df.apply(lambda x: divide((x.sSFR-x.sSFR_median)*1e14, x.sSFR_std*1e12), axis=1)
-    df['logsSFRpermass']=df.apply(lambda x: logx(x.sSFRpermass), axis=1)
-
-    grouped=df[['zrounded','massquantile','logsDMmass']].groupby(['zrounded','massquantile']).agg({'logsDMmass':['median', 'std']})
-    grouped=grouped.xs('logsDMmass', axis=1, drop_level=True)
-    df=pd.merge(df, grouped, on=['zrounded','massquantile'], how='left')
-    df=df.rename({'median':'logsDMmass_median', 'std':'logsDMmass_std'}, axis=1)
-    df['sDMmasspermass']=df.apply(lambda x: divide((x.logsDMmass-x.logsDMmass_median)*1e14, x.logsDMmass_std*1e12), axis=1)
-    df['logsDMmasspermass']=df.apply(lambda x: logx(x.sDMmasspermass), axis=1)
-
-    grouped=df[['zrounded','massquantile','DMEllipticity']].groupby(['zrounded','massquantile']).agg({'DMEllipticity':['median', 'std']})
-    grouped=grouped.xs('DMEllipticity', axis=1, drop_level=True)
-    df=pd.merge(df, grouped, on=['zrounded','massquantile'], how='left')
-    df=df.rename({'median':'DMEllipticity_median', 'std':'DMEllipticity_std'}, axis=1)
-    df['DMEllipticitypermass']=df.apply(lambda x: divide((x.DMEllipticity-x.DMEllipticity_median)*1e14, x.DMEllipticity_std*1e12), axis=1)
-    df['logDMEllipticitypermass']=df.apply(lambda x: logx(x.DMEllipticitypermass), axis=1)
-
-
-
-    """
-
-    df['roundlogmass']=df.apply(lambda x: (np.round(x.logmass*2, decimals=1)/2), axis=1)
-    df['roundlogmass2']=df.apply(lambda x: (np.round(x.logmass*5, decimals=1)/5), axis=1)
-    df['counts']=df.groupby(['zrounded', 'roundlogmass'])['ProjGalaxyID'].transform('count')
-    df['frac']=df.apply(lambda x: 1/x.counts, axis=1)
-    df['catcounts']=df.groupby(['zrounded','categoryn', 'roundlogmass'])['ProjGalaxyID'].transform('size')
-    df['catfrac']=df.apply(lambda x: x.catcounts/x.counts, axis=1)
-
-    df['roundsSFR2']=df.apply(lambda x: (np.round(x.logsSFR*2, decimals=1)/2), axis=1)
-    df['roundsSFR']=df.apply(lambda x: (np.round(x.logsSFR, decimals=1)), axis=1)
-    df['sfrcounts']=df.groupby(['zrounded', 'roundsSFR'])['ProjGalaxyID'].transform('size')
-    df['catsfrcounts']=df.groupby(['zrounded','categoryn', 'roundsSFR'])['ProjGalaxyID'].transform('size')
-    df['catsfrfrac']=df.apply(lambda x: x.catsfrcounts/x.sfrcounts, axis=1)
-
-    df['roundBHmass2']=df.apply(lambda x: (np.round(x.logBHmass*5, decimals=1)/5), axis=1)
-    df['roundBHmass']=df.apply(lambda x: (np.round(x.logBHmass*2, decimals=1)/2), axis=1)
-    df['BHcounts']=df.groupby(['zrounded', 'roundBHmass'])['ProjGalaxyID'].transform('size')
-    df['catBHcounts']=df.groupby(['zrounded','categoryn', 'roundBHmass'])['ProjGalaxyID'].transform('size')
-    df['catBHfrac']=df.apply(lambda x: x.catBHcounts/x.BHcounts, axis=1)
-
-    df['roundDMmass2']=df.apply(lambda x: (np.round(x.logDMmass*2, decimals=1)/2), axis=1)
-    df['roundDMmass']=df.apply(lambda x: (np.round(x.logDMmass, decimals=1)), axis=1)
-    df['DMcounts']=df.groupby(['zrounded', 'roundDMmass'])['ProjGalaxyID'].transform('size')
-    df['catDMcounts']=df.groupby(['zrounded','categoryn', 'roundDMmass'])['ProjGalaxyID'].transform('size')
-    df['catDMfrac']=df.apply(lambda x: x.catDMcounts/x.DMcounts, axis=1)
-    """
-    return df
-
 def classifymergermass(x):
-    if x>0.25: 
+    if x>0.2: 
         return 'major'
     elif x>0.01:
         return 'minor'
-    else:
+    elif x>0.0001:
         return 'accretion'
 
 def classifymergergas(x):
-    if x>0.5: 
+    if x>0.35: 
         return 'gasrich'
-    elif x<0.2:
+    elif x<0.25:
         return 'gaspoor'
     else:
         return 'undefined'
@@ -246,6 +152,56 @@ def mediancolor(x, col):
         return 'g'
     else:
         return 'yellow'
+
+def cutBHmass(x):
+    if x>0:
+        if x<4.5:
+            return np.nan
+        else:
+            return x
+    else:
+        return x
+
+def bulgetranslists(df, binparam, thresh, threshstep):
+    B2B =[]
+    D2D= []
+    B2D=[]
+    D2B=[]
+    BDB=[]
+    DBD=[]
+    nmax=df.ProjGalaxyID.nunique()
+    for id in df.ProjGalaxyID.unique():
+        tempdf=df[df.ProjGalaxyID==id]
+        tempdf=tempdf.sort_values('lbt').reset_index()
+        if tempdf[binparam].max() < thresh:
+            D2D.append(id)
+        elif tempdf[binparam].min() > thresh:
+            B2B.append(id)
+        elif tempdf[binparam].iloc[0]>thresh:
+            if tempdf[binparam].iloc[tempdf.lbt.idxmax()] <thresh-(threshstep):
+                B2D.append(id)
+            else:
+                BDB.append(id)
+        elif tempdf[binparam].iloc[0]<thresh:
+            if tempdf[binparam].iloc[tempdf.lbt.idxmax()] >thresh+(threshstep):
+                D2B.append(id)
+            else:
+                DBD.append(id)
+    return B2B, D2D, B2D, D2B, BDB, DBD
+
+def bulgetrans(x, B2B, D2D, B2D, D2B, BDB, DBD):
+    if x in B2B:
+        return 'B2B'
+    elif x in D2D:
+        return 'D2D'
+    elif x in B2D:
+        return 'B2D'
+    elif x in D2B:
+        return 'D2B'
+    elif x in BDB:
+        return 'BDB'
+    elif x in DBD:
+        return 'DBD'
 
 def mergerinvestigation(df2):
     #return df with only galaxies which have undergone a merger
@@ -387,32 +343,33 @@ def subplothistograms(df, param1, param2, param3, param4, param5, param6):
     plt.show()
 
 def evolutionplot(df, param, param_size, param2):
-    fig, (ax1,ax2)=plt.subplots(2,1, sharex=True)
+    fig, (ax1,ax2, ax3)=plt.subplots(3,1, sharex=True)
     #plt.subplot(211)
     sns.scatterplot(x='z',y=param, hue='ProjGalaxyID',data=df, size=param_size, palette=sns.color_palette('hls', df.ProjGalaxyID.nunique()), legend=False, ax=ax1)
     sns.lineplot(x='z',y=param, hue='ProjGalaxyID',data=df, palette=sns.color_palette('hls', df.ProjGalaxyID.nunique()), ax=ax1,legend=False, linewidth=0.8)
-    ax0=ax1.twinx()
-    sns.lineplot(x='z',y=param2, hue='ProjGalaxyID',data=df, palette=sns.color_palette('hls', df.ProjGalaxyID.nunique()),  ax=ax0)
+    #ax0=ax1.twinx()
+    sns.lineplot(x='z',y=param2, hue='ProjGalaxyID',data=df, palette=sns.color_palette('hls', df.ProjGalaxyID.nunique()),  ax=ax2, legend=False)
+    sns.lineplot(x='z',y='n2d', hue='ProjGalaxyID',data=df, palette=sns.color_palette('hls', df.ProjGalaxyID.nunique()),  ax=ax3, legend=False)
+    """
     for i in range(df.ProjGalaxyID.nunique()):
         ax0.lines[i].set_linestyle('--')
+    """
     #plt.subplot(212)
-    sns.lineplot(x='z',y='logsSFR', hue='ProjGalaxyID',data=df, palette=sns.color_palette('hls', df.ProjGalaxyID.nunique()), ax=ax2, legend=False)
-    ax3=ax2.twinx()
-    sns.lineplot(x='z',y='n_total', hue='ProjGalaxyID',data=df, palette=sns.color_palette('hls', df.ProjGalaxyID.nunique()),  ax=ax3, legend=True)
-    for i in range(df.ProjGalaxyID.nunique()):
-        ax3.lines[i].set_linestyle('--')
+    #sns.lineplot(x='z',y='logsSFR', hue='ProjGalaxyID',data=df, palette=sns.color_palette('hls', df.ProjGalaxyID.nunique()), ax=ax2, legend=False)
+    #ax3=ax2.twinx()
+    #sns.lineplot(x='z',y='n_total', hue='ProjGalaxyID',data=df, palette=sns.color_palette('hls', df.ProjGalaxyID.nunique()),  ax=ax3, legend=False)
+
 
     plt.legend(bbox_to_anchor=(1.1,0.8), loc='center left')
-    plt.xlim(0,1)
+    plt.xlim(0,3)
     plt.title('Evolution of '+param+' sized by'+param_size)
-    #plt.tight_layout()
     plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/evolution of'+param+'and'+param2+'.png')
-    
     plt.show()
 
 def specificgalaxyplot(df, galaxyid, param1, param2, param3, param4):
     df2=df[df.ProjGalaxyID==galaxyid]
     df2=df2[df2.n_total>0]
+    df2=df2[['z', param1, param2, param3, param4, 'filename']]
 
     x = df2['z'].tolist()
     y_image=np.zeros(df2.z.nunique())
@@ -422,15 +379,15 @@ def specificgalaxyplot(df, galaxyid, param1, param2, param3, param4):
     y4 = df2[param4].tolist()
     paths = df2['filename'].tolist()
 
-    fig, (ax1,ax0) = plt.subplots(2,1, gridspec_kw={'height_ratios': [7.8, 1]}, sharex=True, figsize=(9,6))
+    fig, (ax1,ax0) = plt.subplots(2,1, gridspec_kw={'height_ratios': [7.8, 1]}, sharex=True, figsize=(12,6))
     ax2=ax1.twinx()
     ax3=ax1.twinx()
     ax4=ax1.twinx()
     
     axes=[ax1,ax2,ax3,ax4]
-    ax2.spines['right'].set_position(('axes', -0.25))
-    ax3.spines['right'].set_position(('axes', -0.45))
-    ax4.spines['right'].set_position(('axes', -0.65))
+    ax2.spines['right'].set_position(('axes', -0.2))
+    ax3.spines['right'].set_position(('axes', -0.35))
+    ax4.spines['right'].set_position(('axes', -0.5))
     axes[-1].set_frame_on(True)
     axes[-1].patch.set_visible(False)
 
@@ -442,20 +399,20 @@ def specificgalaxyplot(df, galaxyid, param1, param2, param3, param4):
     ax2.plot(x, y2,  'b--', label=param2)
     ax2.yaxis.label.set_color('b')
     ax2.tick_params(axis='y', colors='b')
-    ax2.set_ylabel(param2, labelpad=-40)
+    ax2.set_ylabel(r'$n_{2d}$', labelpad=-40)
 
     ax3.plot(x, y3,  'g--', label=param3)
     ax3.yaxis.label.set_color('g')
     ax3.tick_params(axis='y', colors='g')
-    ax3.set_ylabel(param3, labelpad=-45)
+    ax3.set_ylabel(r'log(sSFR) [Gyr]', labelpad=-45)
 
     ax4.plot(x, y4,  'y', label=param4)
     ax4.yaxis.label.set_color('y')
     ax4.tick_params(axis='y', colors='y')
-    ax4.set_ylabel(param4, labelpad=-50) 
+    ax4.set_ylabel(r'log($M_{*}$) [$M_{\odot}$]', labelpad=-50) 
 
-    lines_labels = [ax.get_legend_handles_labels() for ax in fig.axes]
-    lines, labels = [sum(lol, []) for lol in zip(*lines_labels)]
+    #lines_labels = [ax.get_legend_handles_labels() for ax in fig.axes]
+    #lines, labels = [sum(lol, []) for lol in zip(*lines_labels)]
     
     for x0, y0, path in zip(x, y_image,paths):
         ab = AnnotationBbox(getImage(path), (x0, y0), frameon=False)
@@ -465,11 +422,11 @@ def specificgalaxyplot(df, galaxyid, param1, param2, param3, param4):
     ax0.set_xlabel('z')
     #ax.plot(x, y, ax)
     plt.subplots_adjust(left=0.4,hspace=0)
-    plt.title('Pictorial Evolution of Galaxy'+str(galaxyid))
+    plt.title('Pictorial Evolution of Galaxy '+str(galaxyid))
     plt.draw()
-    ax1.legend(lines, labels, bbox_to_anchor=(0.5, 1.2), loc='upper center', ncol=4)
+    #ax1.legend(lines, labels, bbox_to_anchor=(0.5, 1.2), loc='upper center', ncol=4)
     plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/PictorialEvolutionGalaxy'+str(galaxyid)+'.png')
-    plt.show()
+    plt.close()
 
 def specificgalplotratesofvariabless(df, galaxyid):
     df=df[df.ProjGalaxyID==galaxyid]
@@ -570,46 +527,51 @@ def plotmovinghistogram(df, histparam, binparam):
     plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/Histogramof'+histparam+'highlighted'+binparam+'.png')
     plt.show()
 
-def plotmovinghistogram4(df, histparam1, histparam2, histparam3, histparam4, binparam):
-    z0df=df[df.zrounded==0.]
-    df=df[(df.zrounded==0.1) | (df.zrounded==0.5) | (df.zrounded==1.) | (df.zrounded==2.)]
-    z0df=z0df[['ProjGalaxyID', binparam]]
-    z0df['marker_bin']=pd.qcut(z0df[binparam],10, labels=['10','20','30','40','50','60','70','80','90','100'])
-    df=pd.merge(df, z0df, on=['ProjGalaxyID'], how='left',  suffixes=('','_proj'))
+def plotmovinghistogram4(df, histparam1, histparam2, histparam3, histparam4, binparam, label1, label2, label3, label4):
+    #z0df=df[df.zrounded==0.]
+    df=df[(df.zrounded==0.1) | (df.zrounded==0.5) | (df.zrounded==1.) | (df.zrounded==1.5)]
+    #z0df=z0df[['ProjGalaxyID', binparam]]
+    #z0df['marker_bin']=pd.qcut(z0df[binparam],10, labels=['10','20','30','40','50','60','70','80','90','100'])
+    #df=pd.merge(df, z0df, on=['ProjGalaxyID'], how='left',  suffixes=('','_proj'))
     fig, axs =plt.subplots(4, 4, sharex='col', sharey='row', figsize=(9,6))
     fig.suptitle('Time evolution of historgram of '+histparam1+' showing distribution of '+binparam)
     binedgs1=np.linspace(df[histparam1].min(), df[histparam1].max(), 30)
     binedgs2=np.linspace(df[histparam2].min(), df[histparam2].max(), 30)
     binedgs3=np.linspace(df[histparam3].min(), df[histparam3].max(), 30)
     binedgs4=np.linspace(df[histparam4].min(), df[histparam4].max(), 30)
-    for i,zi in enumerate([0.1, 0.5, 1.0, 2.0]):
+    for i,zi in enumerate([0.1, 0.5, 1.0, 1.5]):
         
         zdf=df[df.zrounded==zi]
-        lowdf=zdf[zdf.marker_bin=='10']
-        highdf=zdf[zdf.marker_bin=='100']
+        #lowdf=zdf[zdf.marker_bin=='10']
+        #highdf=zdf[zdf.marker_bin=='100']
+        highdf=zdf[zdf[binparam]=='D2D']
+        lowdf=zdf[(zdf[binparam]=='B2B')]
+
+
         axs[i,0].hist(zdf[histparam1], color="k", alpha=0.4,label='z='+str(zi), histtype='stepfilled', bins=binedgs1)
-        axs[i,1].hist(zdf[histparam2], color="k", alpha=0.4,label='z='+str(zi), histtype='stepfilled', bins=binedgs2)
-        axs[i,2].hist(zdf[histparam3], color="k", alpha=0.4,label='z='+str(zi), histtype='stepfilled', bins=binedgs3)
-        axs[i,3].hist(zdf[histparam4], color="k", alpha=0.4,label='z='+str(zi), histtype='stepfilled', bins=binedgs4)
+        axs[i,1].hist(zdf[histparam2], color="k",  alpha=0.4,histtype='stepfilled', bins=binedgs2)
+        axs[i,2].hist(zdf[histparam3], color="k",  alpha=0.4,histtype='stepfilled', bins=binedgs3)
+        axs[i,3].hist(zdf[histparam4], color="k",  alpha=0.4,histtype='stepfilled', bins=binedgs4)
         axs[i,0].hist(lowdf[histparam1], color="r", alpha=0.5, histtype='step', bins=binedgs1)
         axs[i,0].hist(highdf[histparam1], color="b", alpha=0.5, histtype='step', bins=binedgs1)
         axs[i,1].hist(lowdf[histparam2], color="r", alpha=0.5, histtype='step', bins=binedgs2)
         axs[i,1].hist(highdf[histparam2], color="b", alpha=0.5, histtype='step', bins=binedgs2)
         axs[i,2].hist(lowdf[histparam3], color="r", alpha=0.5, histtype='step', bins=binedgs3)
         axs[i,2].hist(highdf[histparam3], color="b", alpha=0.5, histtype='step', bins=binedgs3)
-        axs[i,3].hist(lowdf[histparam4], color="r", alpha=0.5, histtype='step', bins=binedgs4)
-        axs[i,3].hist(highdf[histparam4], color="b", alpha=0.5, histtype='step', bins=binedgs4)
+        axs[i,3].hist(lowdf[histparam4], color="r", alpha=0.5, histtype='step', bins=binedgs4, label='constant bulges')
+        axs[i,3].hist(highdf[histparam4], color="b", alpha=0.5, histtype='step', bins=binedgs4,  label='constant discs')
         #axs[i,0].set_xlabel('')
         #axs[i,1].set_xlabel('')
         #axs[i,0].set_ylabel('')
         axs[i,0].set_ylabel('Count')
-        axs[i,3].legend()
+        axs[i,0].legend()
         
-    axs[3,0].set_xlabel(histparam1)
-    axs[3,1].set_xlabel(histparam2)
-    axs[3,2].set_xlabel(histparam3)
-    axs[3,3].set_xlabel(histparam4)
+    axs[3,0].set_xlabel(label1)
+    axs[3,1].set_xlabel(label2)
+    axs[3,2].set_xlabel(label3)
+    axs[3,3].set_xlabel(label4)
     plt.subplots_adjust(wspace=0, hspace=0)
+    axs[3,3].legend()
     #handles, labels = axs[3].get_legend_handles_labels()
     #fig.legend(handles, labels, loc='lower center')
     #plt.tight_layout()
@@ -704,148 +666,7 @@ def plotbulgedisctranscolour(df, maxz, param, colorparam, thresh, threshstep):
     for id in df.ProjGalaxyID.unique():
         tempdf=df[df.ProjGalaxyID==id]
         tempdf=tempdf.sort_values('lbt').reset_index()
-        if tempdf[param].min() > thresh-threshstep:
-            B2B.append(id)
-        elif tempdf[param].max() < thresh+threshstep:
-            D2D.append(id)
-        elif tempdf[param].iloc[0]>thresh:
-            if tempdf[param].iloc[tempdf.lbt.idxmax()] <thresh-(threshstep):
-                B2D.append(id)
-            else:
-                BDB.append(id)
-        elif tempdf[param].iloc[0]<thresh:
-            if tempdf[param].iloc[tempdf.lbt.idxmax()] >thresh+(threshstep):
-                D2B.append(id)
-            else:
-                DBD.append(id)
-    
-    fig, ax =plt.subplots(2, 6, sharey='row', sharex='row', figsize=(12,6))
-    fig.suptitle('Time evolution'+param)
-
-    #Cmap=plt.get_cmap('RdBu')
-    Cmap=mcol.LinearSegmentedColormap.from_list("cmop", ['tomato','cornflowerblue'])
-    Norm=plt.Normalize(df[colorparam].min(),df[colorparam].max())
-
-    for id in B2B:
-        temp=df[df.ProjGalaxyID==id]
-        x=temp.lbt.values
-        y=temp[param].values
-        t=temp[colorparam].values
-        points=np.array([x,y]).T.reshape(-1,1,2)
-        segments=np.concatenate([points[:-1], points[1:]], axis=1)
-        lc=LineCollection(segments, cmap=Cmap, norm=Norm)
-        lc.set_array(t)
-        lc.set_linewidth(0.5)
-        ax[1,0].add_collection(lc)
-    #fig.colorbar(line, ax=ax[1,0])
-        #ax[1,0].plot(temp.lbt, temp[param], 'k', linewidth=0.2)
-    ax[1,0].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
-    ax[0,0].bar(0,len(B2B), color='purple')
-    ax[0,0].text(-.1, 1, str(round(100*len(B2B)/nmax, 1)) +'%', fontsize=12, color='white')
-    for id in D2D:
-        temp=df[df.ProjGalaxyID==id]
-        x=temp.lbt.values
-        y=temp[param].values
-        t=temp[colorparam].values
-        points=np.array([x,y]).T.reshape(-1,1,2)
-        segments=np.concatenate([points[:-1], points[1:]], axis=1)
-        lc=LineCollection(segments, cmap=Cmap, norm=Norm)
-        lc.set_array(t)
-        lc.set_linewidth(0.5)
-        ax[1,1].add_collection(lc)
-    ax[1,1].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
-    ax[0,1].bar(0,len(D2D), color='purple')
-    ax[0,1].text(-.1, 1, ''+str(round(100*len(D2D)/nmax, 1))+'%', fontsize=12, color='white')
-    for id in B2D:
-        temp=df[df.ProjGalaxyID==id]
-        x=temp.lbt.values
-        y=temp[param].values
-        t=temp[colorparam].values
-        points=np.array([x,y]).T.reshape(-1,1,2)
-        segments=np.concatenate([points[:-1], points[1:]], axis=1)
-        lc=LineCollection(segments, cmap=Cmap, norm=Norm)
-        lc.set_array(t)
-        lc.set_linewidth(0.5)
-        ax[1,2].add_collection(lc)
-    ax[1,2].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
-    ax[0,2].bar(0,len(B2D), color='purple')
-    ax[0,2].text(-.1, 1, str(round(100*len(B2D)/nmax, 1))+'%', fontsize=12, color='white')
-    for id in D2B:
-        temp=df[df.ProjGalaxyID==id]
-        x=temp.lbt.values
-        y=temp[param].values
-        t=temp[colorparam].values
-        points=np.array([x,y]).T.reshape(-1,1,2)
-        segments=np.concatenate([points[:-1], points[1:]], axis=1)
-        lc=LineCollection(segments, cmap=Cmap, norm=Norm)
-        lc.set_array(t)
-        lc.set_linewidth(0.5)
-        ax[1,3].add_collection(lc)
-    ax[1,3].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
-    ax[0,3].bar(0,len(D2B), color='purple')
-    ax[0,3].text(-.1, 1, str(round(100*len(D2B)/nmax, 1))+'%', fontsize=12, color='white')
-    for id in BDB:
-        temp=df[df.ProjGalaxyID==id]
-        x=temp.lbt.values
-        y=temp[param].values
-        t=temp[colorparam].values
-        points=np.array([x,y]).T.reshape(-1,1,2)
-        segments=np.concatenate([points[:-1], points[1:]], axis=1)
-        lc=LineCollection(segments, cmap=Cmap, norm=Norm)
-        lc.set_array(t)
-        lc.set_linewidth(0.5)
-        ax[1,4].add_collection(lc)
-    ax[1,4].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
-    ax[0,4].bar(0,len(BDB), color='purple')
-    ax[0,4].text(-.1, 1, str(round(100*len(BDB)/nmax, 1)) +'%', fontsize=12, color='white')
-    for id in DBD:
-        temp=df[df.ProjGalaxyID==id]
-        x=temp.lbt.values
-        y=temp[param].values
-        t=temp[colorparam].values
-        points=np.array([x,y]).T.reshape(-1,1,2)
-        segments=np.concatenate([points[:-1], points[1:]], axis=1)
-        lc=LineCollection(segments, cmap=Cmap, norm=Norm)
-        lc.set_array(t)
-        lc.set_linewidth(0.5)
-        ax[1,5].add_collection(lc)
-    ax[1,5].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
-    ax[0,5].bar(0,len(DBD), color='purple')
-    ax[0,5].text(-.1, 1, str(round(100*len(DBD)/nmax, 1))+'%', fontsize=12, color='white')
-
-    ax[0,0].set_title('B'),ax[0,1].set_title('D'),ax[0,2].set_title('BD'),ax[0,3].set_title('DB'),ax[0,4].set_title('BDB'),ax[0,5].set_title('DBD')
-    ax[1,2].set_xlabel('look back time (Gyr)')
-    ax[1,0].set_ylabel(param)
-    ax[0,0].set_ylabel('count')
-    ax[1,0].set_xlim(df.lbt.min(), df.lbt.max())
-    ax[1,0].set_ylim(df[param].min(), df[param].max())
-    locs = ax[1,0].get_xticks()
-    labels = [-item for item in locs]
-    #ax[1,0].set_xticklabels(labels)
-    #ax[0,1].xticks(locs, labels),ax[0,2].xticks(locs, labels),ax[0,3].xticks(locs, labels),ax[0,4].xticks(locs, labels), ax[0,5].xticks(locs, labels)
-    plt.subplots_adjust(right=0.8, wspace=0.1, hspace=0)
-    cbar_ax=fig.add_axes([0.85,0.15,0.05,0.8])
-    sm=plt.cm.ScalarMappable(cmap=Cmap, norm=Norm)
-    sm.set_array([])
-    cbar=plt.colorbar(sm, cax=cbar_ax).set_label(colorparam)
-    plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/Evolution of'+str(param)+'thresh'+str(thresh)+'zmax'+str(maxz)+'color.png')
-    plt.show()
-
-def plotbulgedisctranscolourmerger(df, maxz, param, colorparam, merger, mergername, thresh, threshstep, merge=True):
-    B2B =[]
-    D2D= []
-    B2D=[]
-    D2B=[]
-    BDB=[]
-    DBD=[]
-    if (merger==True):
-        df=df[df.Starmassmergerfrac>0.]
-    df=df[df.z<maxz]
-    nmax=df.ProjGalaxyID.nunique()
-    for id in df.ProjGalaxyID.unique():
-        tempdf=df[df.ProjGalaxyID==id]
-        tempdf=tempdf.sort_values('lbt').reset_index()
-        if tempdf[param].min() > thresh-threshstep:
+        if tempdf[param].min() > thresh:
             B2B.append(id)
         elif tempdf[param].max() < thresh:
             D2D.append(id)
@@ -860,6 +681,23 @@ def plotbulgedisctranscolourmerger(df, maxz, param, colorparam, merger, mergerna
             else:
                 DBD.append(id)
     
+    B2Bl, D2Dl, B2Dl, D2Bl, BDBl, DBDl = bulgetranslists(df, 'n2d',thresh - threshstep, threshstep)
+    B2Bu, D2Du, B2Du, D2Bu, BDBu, DBDu = bulgetranslists(df, 'n2d', thresh + threshstep, threshstep)
+    
+    B2BU=np.abs(len(B2Bu)-len(B2B))
+    B2BL=np.abs(len(B2B)-len(B2Bl))
+    D2DU=np.abs(len(D2Du)-len(D2D))
+    D2DL=np.abs(len(D2D)-len(D2Dl))
+    B2DU=np.abs(len(B2Du)-len(B2D))
+    B2DL=np.abs(len(B2D)-len(B2Dl))
+    D2BU=np.abs(len(D2Bu)-len(D2B))
+    D2BL=np.abs(len(D2B)-len(D2Bl))
+    BDBU=np.abs(len(BDBu)-len(BDB))
+    BDBL=np.abs(len(BDB)-len(BDBl))
+    DBDU=np.abs(len(DBDu)-len(DBD))
+    DBDL=np.abs(len(DBD)-len(DBDl))
+
+
     fig, ax =plt.subplots(2, 6, sharey='row', sharex='row', figsize=(12,6))
     fig.suptitle('Time evolution'+param)
 
@@ -878,10 +716,8 @@ def plotbulgedisctranscolourmerger(df, maxz, param, colorparam, merger, mergerna
         lc.set_array(t)
         lc.set_linewidth(0.5)
         ax[1,0].add_collection(lc)
-        dfmergetemp=temp[temp.Starmassmergerfrac>0.]
-        ax[1,0].scatter(dfmergetemp.lbt, dfmergetemp[param], c=dfmergetemp[merger], s=5)
     ax[1,0].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
-    ax[0,0].bar(0,len(B2B), color='purple')
+    ax[0,0].bar(0,len(B2B), color='purple',  yerr=[[B2BL], [B2BU]],  capsize=5.0, alpha=0.8)
     ax[0,0].text(-.1, 1, str(round(100*len(B2B)/nmax, 1)) +'%', fontsize=12, color='white')
     for id in D2D:
         temp=df[df.ProjGalaxyID==id]
@@ -894,10 +730,8 @@ def plotbulgedisctranscolourmerger(df, maxz, param, colorparam, merger, mergerna
         lc.set_array(t)
         lc.set_linewidth(0.5)
         ax[1,1].add_collection(lc)
-        dfmergetemp=temp[temp.Starmassmergerfrac>0.]
-        ax[1,1].scatter(dfmergetemp.lbt, dfmergetemp[param], c=dfmergetemp[merger], s=5)
     ax[1,1].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
-    ax[0,1].bar(0,len(D2D), color='purple')
+    ax[0,1].bar(0,len(D2D), color='purple', yerr=[[D2DL], [D2DU]],capsize=5.0, alpha=0.8)
     ax[0,1].text(-.1, 1, ''+str(round(100*len(D2D)/nmax, 1))+'%', fontsize=12, color='white')
     for id in B2D:
         temp=df[df.ProjGalaxyID==id]
@@ -910,10 +744,8 @@ def plotbulgedisctranscolourmerger(df, maxz, param, colorparam, merger, mergerna
         lc.set_array(t)
         lc.set_linewidth(0.5)
         ax[1,2].add_collection(lc)
-        dfmergetemp=temp[temp.Starmassmergerfrac>0.]
-        ax[1,2].scatter(dfmergetemp.lbt, dfmergetemp[param], c=dfmergetemp[merger], s=5)
     ax[1,2].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
-    ax[0,2].bar(0,len(B2D), color='purple')
+    ax[0,2].bar(0,len(B2D), color='purple', yerr=[[B2DL], [B2DU]],capsize=5.0, alpha=0.8)
     ax[0,2].text(-.1, 1, str(round(100*len(B2D)/nmax, 1))+'%', fontsize=12, color='white')
     for id in D2B:
         temp=df[df.ProjGalaxyID==id]
@@ -926,10 +758,8 @@ def plotbulgedisctranscolourmerger(df, maxz, param, colorparam, merger, mergerna
         lc.set_array(t)
         lc.set_linewidth(0.5)
         ax[1,3].add_collection(lc)
-        dfmergetemp=temp[temp.Starmassmergerfrac>0.]
-        ax[1,3].scatter(dfmergetemp.lbt, dfmergetemp[param], c=dfmergetemp[merger], s=5)
     ax[1,3].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
-    ax[0,3].bar(0,len(D2B), color='purple')
+    ax[0,3].bar(0,len(D2B), color='purple', yerr=[[D2BL], [D2BU]], capsize=5.0, alpha=0.8)
     ax[0,3].text(-.1, 1, str(round(100*len(D2B)/nmax, 1))+'%', fontsize=12, color='white')
     for id in BDB:
         temp=df[df.ProjGalaxyID==id]
@@ -942,10 +772,8 @@ def plotbulgedisctranscolourmerger(df, maxz, param, colorparam, merger, mergerna
         lc.set_array(t)
         lc.set_linewidth(0.5)
         ax[1,4].add_collection(lc)
-        dfmergetemp=temp[temp.Starmassmergerfrac>0.]
-        ax[1,4].scatter(dfmergetemp.lbt, dfmergetemp[param], c=dfmergetemp[merger], s=5)
     ax[1,4].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
-    ax[0,4].bar(0,len(BDB), color='purple')
+    ax[0,4].bar(0,len(BDB), color='purple', yerr=[[BDBL], [BDBU]],capsize=5.0, alpha=0.8)
     ax[0,4].text(-.1, 1, str(round(100*len(BDB)/nmax, 1)) +'%', fontsize=12, color='white')
     for id in DBD:
         temp=df[df.ProjGalaxyID==id]
@@ -958,17 +786,186 @@ def plotbulgedisctranscolourmerger(df, maxz, param, colorparam, merger, mergerna
         lc.set_array(t)
         lc.set_linewidth(0.5)
         ax[1,5].add_collection(lc)
-        dfmergetemp=temp[temp.Starmassmergerfrac>0.]
+    ax[1,5].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
+    ax[0,5].bar(0,len(DBD), color='purple', yerr=[[DBDL], [DBDU]], capsize=5.0, alpha=0.8)
+    ax[0,5].text(-.1, 1, str(round(100*len(DBD)/nmax, 1))+'%', fontsize=12, color='white')
+
+    ax[0,0].set_title('B'),ax[0,1].set_title('D'),ax[0,2].set_title('BD'),ax[0,3].set_title('DB'),ax[0,4].set_title('BDB'),ax[0,5].set_title('DBD')
+    ax[1,2].set_xlabel('look back time (Gyr)')
+    ax[1,0].set_ylabel(param)
+    ax[0,0].set_ylabel('count')
+    ax[0,0].set_ylim(0,80)
+    ax[1,0].set_xlim(df.lbt.min(), df.lbt.max())
+    ax[1,0].set_ylim(df[param].min(), df[param].max())
+    locs = ax[1,0].get_xticks()
+    labels = [-item for item in locs]
+    #ax[1,0].set_xticklabels(labels)
+    #ax[0,1].xticks(locs, labels),ax[0,2].xticks(locs, labels),ax[0,3].xticks(locs, labels),ax[0,4].xticks(locs, labels), ax[0,5].xticks(locs, labels)
+    plt.subplots_adjust(right=0.8, wspace=0.1, hspace=0)
+    cbar_ax=fig.add_axes([0.85,0.15,0.05,0.8])
+    sm=plt.cm.ScalarMappable(cmap=Cmap, norm=Norm)
+    sm.set_array([])
+    cbar=plt.colorbar(sm, cax=cbar_ax).set_label(r'residual of sSFR per mass per z [$M_{\odot} Gyr^{-1}$]')
+    plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/Evolution of'+str(param)+'thresh'+str(thresh)+'zmax'+str(maxz)+'color2.png')
+    plt.show()
+
+def plotbulgedisctranscolourmerger(df, maxz, param, colorparam, merger, mergername, mergername2, thresh, threshstep, merge=True):
+    
+    B2B, D2D, B2D, D2B, BDB, DBD = bulgetranslists(df, 'n2d', thresh, threshstep)
+    df['transtypen2d']=df.apply(lambda x: bulgetrans(x.ProjGalaxyID, B2B, D2D, B2D, D2B, BDB, DBD), axis=1)
+
+    B2B=df[df.transtypen2d=='B2B']
+    D2D=df[df.transtypen2d=='D2D']
+    B2D=df[df.transtypen2d=='B2D']
+    D2B=df[df.transtypen2d=='D2B']
+    BDB=df[df.transtypen2d=='BDB']
+    DBD=df[df.transtypen2d=='DBD']
+
+    fig, ax =plt.subplots(2, 6, sharey='row', sharex='row', figsize=(12,6))
+    fig.suptitle('Time evolution'+param)
+
+    #Cmap=plt.get_cmap('RdBu')
+    Cmap=mcol.LinearSegmentedColormap.from_list("cmop", ['tomato','cornflowerblue'])
+    Norm=plt.Normalize(df[colorparam].min(),df[colorparam].max())
+    for id in B2B.ProjGalaxyID.unique():
+        temp=df[df.ProjGalaxyID==id]
+        x=temp.lbt.values
+        y=temp[param].values
+        t=temp[colorparam].values
+        points=np.array([x,y]).T.reshape(-1,1,2)
+        segments=np.concatenate([points[:-1], points[1:]], axis=1)
+        lc=LineCollection(segments, cmap=Cmap, norm=Norm)
+        lc.set_array(t)
+        lc.set_linewidth(0.5)
+        ax[1,0].add_collection(lc)
+        dfmergetemp=temp[temp[mergername]>0.]
+        ax[1,0].scatter(dfmergetemp.lbt, dfmergetemp[param], c=dfmergetemp[merger], s=5)
+        
+    ax[1,0].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
+    dfM=df[df[mergername]>0.]
+    ax[0,0].bar((-1,0,1),\
+        (len(dfM[(dfM['transtypen2d']=='B2B') & (dfM[merger]=='g')]),len(dfM[(dfM['transtypen2d']=='B2B') & (dfM[merger]=='orange')]),len(dfM[(dfM['transtypen2d']=='B2B') & (dfM[merger]=='red')])),\
+             color=['g', 'orange', 'red'])
+    ax[0,0].text(-1.3, 1, str(round(100*len(dfM[(dfM['transtypen2d']=='B2B') & (dfM[merger]=='g')])/len(dfM[dfM['transtypen2d']=='B2B']))) +'%', fontsize=10, color='k')
+    ax[0,0].text(-0.3, 1, str(round(100*len(dfM[(dfM['transtypen2d']=='B2B') & (dfM[merger]=='orange')])/len(dfM[dfM['transtypen2d']=='B2B']))) +'%', fontsize=10, color='k')
+    ax[0,0].text(0.7, 1, str(round(100*len(dfM[(dfM['transtypen2d']=='B2B') & (dfM[merger]=='red')])/len(dfM[dfM['transtypen2d']=='B2B']))) +'%', fontsize=10, color='k')
+   
+    for id in D2D.ProjGalaxyID.unique():
+        temp=df[df.ProjGalaxyID==id]
+        x=temp.lbt.values
+        y=temp[param].values
+        t=temp[colorparam].values
+        points=np.array([x,y]).T.reshape(-1,1,2)
+        segments=np.concatenate([points[:-1], points[1:]], axis=1)
+        lc=LineCollection(segments, cmap=Cmap, norm=Norm)
+        lc.set_array(t)
+        lc.set_linewidth(0.5)
+        ax[1,1].add_collection(lc)
+        dfmergetemp=temp[temp[mergername]>0.]
+        ax[1,1].scatter(dfmergetemp.lbt, dfmergetemp[param], c=dfmergetemp[merger], s=5)
+    ax[1,1].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
+
+    ax[0,1].bar((-1,0,1),\
+        (len(dfM[(dfM['transtypen2d']=='D2D') & (dfM[merger]=='g')]),len(dfM[(dfM['transtypen2d']=='D2D') & (dfM[merger]=='orange')]),len(dfM[(dfM['transtypen2d']=='D2D') & (dfM[merger]=='red')])),\
+             color=['g', 'orange', 'red'])
+    ax[0,1].text(-1.3, 1, str(round(100*len(dfM[(dfM['transtypen2d']=='D2D') & (dfM[merger]=='g')])/len(dfM[dfM['transtypen2d']=='D2D']))) +'%', fontsize=10, color='k')
+    ax[0,1].text(-0.3, 1, str(round(100*len(dfM[(dfM['transtypen2d']=='D2D') & (df[merger]=='orange')])/len(dfM[dfM['transtypen2d']=='D2D']))) +'%', fontsize=10, color='k')
+    ax[0,1].text(0.7, 1, str(round(100*len(dfM[(dfM['transtypen2d']=='D2D') & (df[merger]=='red')])/len(dfM[dfM['transtypen2d']=='D2D']))) +'%', fontsize=10, color='k')
+
+    for id in B2D.ProjGalaxyID.unique():
+        temp=df[df.ProjGalaxyID==id]
+        x=temp.lbt.values
+        y=temp[param].values
+        t=temp[colorparam].values
+        points=np.array([x,y]).T.reshape(-1,1,2)
+        segments=np.concatenate([points[:-1], points[1:]], axis=1)
+        lc=LineCollection(segments, cmap=Cmap, norm=Norm)
+        lc.set_array(t)
+        lc.set_linewidth(0.5)
+        ax[1,2].add_collection(lc)
+        dfmergetemp=temp[temp[mergername]>0.]
+        ax[1,2].scatter(dfmergetemp.lbt, dfmergetemp[param], c=dfmergetemp[merger], s=5)
+    ax[1,2].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
+    
+    ax[0,2].bar((-1,0,1),\
+        (len(dfM[(dfM['transtypen2d']=='B2D') & (dfM[merger]=='g')]),len(dfM[(dfM['transtypen2d']=='B2D') & (dfM[merger]=='orange')]),len(dfM[(dfM['transtypen2d']=='B2D') & (dfM[merger]=='red')])),\
+             color=['g', 'orange', 'red'])
+    ax[0,2].text(-1.3, 1, str(round(100*len(dfM[(dfM['transtypen2d']=='B2D') & (dfM[merger]=='g')])/len(dfM[dfM['transtypen2d']=='B2D']))) +'%', fontsize=10, color='k')
+    ax[0,2].text(-0.3, 1, str(round(100*len(dfM[(dfM['transtypen2d']=='B2D') & (dfM[merger]=='orange')])/len(dfM[dfM['transtypen2d']=='B2D']))) +'%', fontsize=10, color='k')
+    ax[0,2].text(0.7, 1, str(round(100*len(dfM[(dfM['transtypen2d']=='B2D') & (dfM[merger]=='red')])/len(dfM[dfM['transtypen2d']=='B2D']))) +'%', fontsize=10, color='k')
+   
+    for id in D2B.ProjGalaxyID.unique():
+        temp=df[df.ProjGalaxyID==id]
+        x=temp.lbt.values
+        y=temp[param].values
+        t=temp[colorparam].values
+        points=np.array([x,y]).T.reshape(-1,1,2)
+        segments=np.concatenate([points[:-1], points[1:]], axis=1)
+        lc=LineCollection(segments, cmap=Cmap, norm=Norm)
+        lc.set_array(t)
+        lc.set_linewidth(0.5)
+        ax[1,3].add_collection(lc)
+        dfmergetemp=temp[temp[mergername]>0.]
+        ax[1,3].scatter(dfmergetemp.lbt, dfmergetemp[param], c=dfmergetemp[merger], s=5)
+    ax[1,3].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
+    print(dfM[(dfM['transtypen2d']=='D2B') & (dfM[merger]=='g')])
+    ax[0,3].bar((-1,0,1),\
+        (len(dfM[(dfM['transtypen2d']=='D2B') & (dfM[merger]=='g')]),len(dfM[(dfM['transtypen2d']=='D2B') & (dfM[merger]=='orange')]),len(dfM[(dfM['transtypen2d']=='D2B') & (dfM[merger]=='red')])),\
+             color=['g', 'orange', 'red'])
+    ax[0,3].text(-1.3, 1, str(round(100*len(dfM[(dfM['transtypen2d']=='D2B') & (dfM[merger]=='g')])/len(dfM[dfM['transtypen2d']=='D2B']))) +'%', fontsize=10, color='k')
+    ax[0,3].text(-0.3, 1, str(round(100*len(dfM[(dfM['transtypen2d']=='D2B') & (dfM[merger]=='orange')])/len(dfM[dfM['transtypen2d']=='D2B']))) +'%', fontsize=10, color='k')
+    ax[0,3].text(0.7, 1, str(round(100*len(dfM[(dfM['transtypen2d']=='D2B') & (dfM[merger]=='red')])/len(dfM[dfM['transtypen2d']=='D2B']))) +'%', fontsize=10, color='k')
+   
+    for id in BDB.ProjGalaxyID.unique():
+        temp=df[df.ProjGalaxyID==id]
+        x=temp.lbt.values
+        y=temp[param].values
+        t=temp[colorparam].values
+        points=np.array([x,y]).T.reshape(-1,1,2)
+        segments=np.concatenate([points[:-1], points[1:]], axis=1)
+        lc=LineCollection(segments, cmap=Cmap, norm=Norm)
+        lc.set_array(t)
+        lc.set_linewidth(0.5)
+        ax[1,4].add_collection(lc)
+        dfmergetemp=temp[temp[mergername]>0.]
+        ax[1,4].scatter(dfmergetemp.lbt, dfmergetemp[param], c=dfmergetemp[merger], s=5)
+    ax[1,4].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
+    
+    ax[0,4].bar((-1,0,1),\
+        (len(dfM[(dfM['transtypen2d']=='BDB') & (dfM[merger]=='g')]),len(dfM[(dfM['transtypen2d']=='BDB') & (dfM[merger]=='orange')]),len(dfM[(dfM['transtypen2d']=='BDB') & (dfM[merger]=='red')])),\
+             color=['g', 'orange', 'red'])
+    ax[0,4].text(-1.3, 1, str(round(100*len(dfM[(dfM['transtypen2d']=='BDB') & (dfM[merger]=='g')])/len(dfM[dfM['transtypen2d']=='BDB']))) +'%', fontsize=10, color='k')
+    ax[0,4].text(-0.3, 1, str(round(100*len(dfM[(dfM['transtypen2d']=='BDB') & (dfM[merger]=='orange')])/len(dfM[dfM['transtypen2d']=='BDB']))) +'%', fontsize=10, color='k')
+    ax[0,4].text(0.7, 1, str(round(100*len(dfM[(dfM['transtypen2d']=='BDB') & (dfM[merger]=='red')])/len(dfM[dfM['transtypen2d']=='BDB']))) +'%', fontsize=10, color='k')
+   
+    for id in DBD.ProjGalaxyID.unique():
+        temp=df[df.ProjGalaxyID==id]
+        x=temp.lbt.values
+        y=temp[param].values
+        t=temp[colorparam].values
+        points=np.array([x,y]).T.reshape(-1,1,2)
+        segments=np.concatenate([points[:-1], points[1:]], axis=1)
+        lc=LineCollection(segments, cmap=Cmap, norm=Norm)
+        lc.set_array(t)
+        lc.set_linewidth(0.5)
+        ax[1,5].add_collection(lc)
+        dfmergetemp=temp[temp[mergername]>0.]
         ax[1,5].scatter(dfmergetemp.lbt, dfmergetemp[param], c=dfmergetemp[merger], s=5)
 
     ax[1,5].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'r--', linewidth=1)
-    ax[0,5].bar(0,len(DBD), color='purple')
-    ax[0,5].text(-.1, 1, str(round(100*len(DBD)/nmax, 1))+'%', fontsize=12, color='white')
-
+    
+    ax[0,5].bar((-1,0,1),\
+        (len(dfM[(dfM['transtypen2d']=='DBD') & (dfM[merger]=='g')]),len(dfM[(dfM['transtypen2d']=='DBD') & (dfM[merger]=='orange')]),len(dfM[(dfM['transtypen2d']=='DBD') & (dfM[merger]=='red')])),\
+             color=['g', 'orange', 'red'])
+    ax[0,5].text(-1.3, 1, str(round(100*len(dfM[(dfM['transtypen2d']=='DBD') & (dfM[merger]=='g')])/len(dfM[dfM['transtypen2d']=='DBD']))) +'%', fontsize=10, color='k')
+    ax[0,5].text(-0.3, 1, str(round(100*len(dfM[(dfM['transtypen2d']=='DBD') & (dfM[merger]=='orange')])/len(dfM[dfM['transtypen2d']=='DBD']))) +'%', fontsize=10, color='k')
+    ax[0,5].text(0.7, 1, str(round(100*len(dfM[(dfM['transtypen2d']=='DBD') & (dfM[merger]=='red')])/len(dfM[dfM['transtypen2d']=='DBD']))) +'%', fontsize=10, color='k')
+   
+    
     legendelements=[]
     for color in df[merger].unique():
         temp=df[df[merger]==color]
-        for colorname in temp[mergername].unique():
+        for colorname in temp[mergername2].unique():
             legendelements.append(Line2D([0],[0], marker='o', color='w', label=colorname, markerfacecolor=color, markersize=10))
     ax[1,0].legend(handles=legendelements, bbox_to_anchor=(-0.2, 1.1))
     
@@ -986,7 +983,7 @@ def plotbulgedisctranscolourmerger(df, maxz, param, colorparam, merger, mergerna
     cbar_ax=fig.add_axes([0.85,0.15,0.05,0.8])
     sm=plt.cm.ScalarMappable(cmap=Cmap, norm=Norm)
     sm.set_array([])
-    cbar=plt.colorbar(sm, cax=cbar_ax).set_label(colorparam)
+    cbar=plt.colorbar(sm, cax=cbar_ax).set_label(r'residual of sSFR per mass per z [$M_{\odot} Gyr^{-1}$]')
     if merge==True:
         plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/Evolution of'+str(param)+'thresh'+str(thresh)+'zmax'+str(maxz)+'colorby'+str(mergername)+'merge.png')
     else:
@@ -1091,38 +1088,97 @@ def plotmovingquantilesdemo(df, paramx, paramy, binparam):
     plt.show()
 
 def plotmultivariateplot(df):
-    names=['DiscToTotal', 'n_total', 'asymm','logsSFR','logmass', 'logBHmass', 'logDMmass']
+    names=['n2d', 'logsSFR','logmass', 'logBHmass', 'logDMmass', 'loggasmass', 'logSFThermalEnergy', 'logsSFMass', 'logDMHalfMassRad']
+    labels=['n2d', 'logsSFR','logM', r'log$M_{BH}$', r'log$M_{halo}$', r'log$M_{Gas}$', r'log$E_{gas,SF}$', r'log$\frac{M_{gas,SF}}{M}$', r'log$R_{halo, halfmass}$']
+    truths=df[df.transtypen2d=='D2D']
     df=df[names]
-    GTC = pygtc.plotGTC(df, paramNames=names)
-    plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/GTCplot.png')
+    truths=truths[names]
+    df=df.dropna()
+    truths=truths.dropna()
+    
+    print(df[names])
+    GTC = pygtc.plotGTC(df, paramNames=labels)
+    plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/evolvingGTCplot.png')
     plt.show()
 
-def categorybarchart(df, cat):
+def categorybarchart(df, cat, catl, catu):
     zlist=[]
     alist=[]
     blist=[]
     dlist=[]
+
+    alistl=[]
+    blistl=[]
+    dlistl=[]
+
+    alistu=[]
+    blistu=[]
+    dlistu=[]
+
+    lbtlist=[]
+
     for i in df.zrounded.unique():
         tempdf=df[df.zrounded==i]
         Anum=len(tempdf[tempdf[cat]=='A'])
         Bnum=len(tempdf[tempdf[cat]=='B'])
         Dnum=len(tempdf[tempdf[cat]=='D'])
+
+        Anuml=len(tempdf[tempdf[catl]=='A'])
+        Bnuml=len(tempdf[tempdf[catl]=='B'])
+        Dnuml=len(tempdf[tempdf[catl]=='D'])
+
+        Anumu=len(tempdf[tempdf[catu]=='A'])
+        Bnumu=len(tempdf[tempdf[catu]=='B'])
+        Dnumu=len(tempdf[tempdf[catu]=='D'])
+
         zlist.append(i)
         alist.append(Anum)
         blist.append(Bnum)
         dlist.append(Dnum)
+
+        alistl.append(np.abs(Anum-Anuml))
+        blistl.append(np.abs(Bnum-Bnuml))
+        dlistl.append(np.abs(Dnum-Dnuml))
+
+        alistu.append(np.abs(Anumu-Anum))
+        blistu.append(np.abs(Bnumu-Bnum))
+        dlistu.append(np.abs(Dnumu-Dnum))
+        for j in tempdf.lbt.unique():
+            lbtlist.append(-j)
     zarr=np.array(zlist)
     aarr=np.array(alist)
     barr=np.array(blist)
     darr=np.array(dlist)
-    print(zlist, alist, blist, dlist)
+
+    aarru=np.array(alistu)
+    barru=np.array(blistu)
+    darru=np.array(dlistu)
+
+    aarrl=np.array(alistl)
+    barrl=np.array(blistl)
+    darrl=np.array(dlistl)
+
+    lbtarr=np.array(lbtlist)
+    print(zlist, alist, blist, dlist, lbtlist)
     width=0.09
-    plt.bar(zarr - width/3, aarr, width/3, label='Asymmetric')
-    plt.bar(zarr, barr, width/3, label='Bulge')
-    plt.bar(zarr + width/3, darr, width/3, label='Disc')
-    plt.legend()
-    plt.xlabel('z')
-    plt.ylabel('no. of galaxies by'+cat)
+    fig, ax =plt.subplots()
+    ax0=ax.twiny()
+    ax.bar(zarr +width/3, aarr, width/3, yerr=[aarrl,aarru], label='Asymmetric', color='green', ecolor='darkgreen',  capsize=0.5, alpha=0.5)
+    ax.bar(zarr + 2*width/3, barr, width/3, yerr=[barrl,barru],label='Bulge',  color='red', ecolor='darkred',  capsize=0.5,  alpha=0.5)
+    ax.bar(zarr + width, darr, width/3, yerr=[darrl,darru],label='Disc',  color='blue', ecolor='darkblue',  capsize=0.5,  alpha=0.5)
+
+    
+    ax.set_xlim(0,2.8)
+    #ax0.cla()
+    ax0.set_xlim(ax.get_xlim())
+    #ax0.set_xticks(ax.get_xticks())
+    ax0.set_xticklabels([lbtarr[15],lbtarr[10], lbtarr[6], lbtarr[4],lbtarr[2], lbtarr[0] ])
+    ax0.set_xlabel('Lookback time [Gyr]')
+    
+    #ax0.set_xlim(df.lbt.max(), df.lbt.min())
+    ax.legend()
+    ax.set_xlabel('Redshift (z)')
+    ax.set_ylabel(r'no. of galaxies by $n_{2d}$')
     plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/barchart'+cat+'.png')
     plt.show()
 
@@ -1139,9 +1195,9 @@ def plotfrac(df, y, cat, color):
     dfB=df.copy()
     dfD=df.copy()
     colormin=df[color].min()
-    dfA['catfrac2']=dfA.apply(lambda x: calccatfrac2(x.categoryn, x.catDMfrac, 'A', colormin), axis=1)
-    dfB['catfrac2']=dfB.apply(lambda x: calccatfrac2(x.categoryn, x.catDMfrac, 'B', colormin), axis=1)
-    dfD['catfrac2']=dfD.apply(lambda x: calccatfrac2(x.categoryn, x.catDMfrac, 'D', colormin), axis=1)
+    dfA['catfrac2']=dfA.apply(lambda x: calccatfrac2(x.categoryn2d, x.catfrac, 'A', colormin), axis=1)
+    dfB['catfrac2']=dfB.apply(lambda x: calccatfrac2(x.categoryn2d, x.catfrac, 'B', colormin), axis=1)
+    dfD['catfrac2']=dfD.apply(lambda x: calccatfrac2(x.categoryn2d, x.catfrac, 'D', colormin), axis=1)
     ABD=[dfA, dfB, dfD]
     Cmap=plt.cm.viridis
     
@@ -1154,13 +1210,45 @@ def plotfrac(df, y, cat, color):
         ax[i].set_xlabel('z')
 
     ax[0].set_title('Asymmetrics'), ax[1].set_title('Bulges'), ax[2].set_title('Discs')
-    plt.xlim(df.z.min(), df.z.max()+0.1), plt.ylim(df[y].min(),df[y].max() +0.1)
-    ax[0].set_ylabel(''+y+' $M_{\odot}$')
+    plt.xlim(df.z.min(), df.z.max()+0.1), plt.ylim(10,df[y].max() + 0.2)
+    ax[0].set_ylabel(r'$log(M_{*})$ [$M_{\odot}$]')
     plt.subplots_adjust(right=0.8, wspace=0, hspace=0)
     cbar_ax=fig.add_axes([0.8,0.11,0.05,0.77])
     sm=plt.cm.ScalarMappable(cmap=Cmap, norm=Norm)
     sm.set_array([])
-    cbar=plt.colorbar(sm, cax=cbar_ax).set_label('Fraction in'+color+' in each component')
+    cbar=plt.colorbar(sm, cax=cbar_ax).set_label(r'$M_{*}$ fraction in each component')
+    plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/evolvingfrac'+y+''+cat+'colouredby'+color+'.png')
+    plt.show()
+
+def plotfrac2(df, y, cat, color):
+    fig, ax =plt.subplots(1, 3, sharex=True, sharey=True, figsize=(9,5))
+    
+    dfA=df.copy()
+    dfB=df.copy()
+    dfD=df.copy()
+    colormin=df[color].min()
+    dfA['catfrac2']=dfA.apply(lambda x: calccatfrac2(x.categoryn2d, x.catDMfrac, 'A', colormin), axis=1)
+    dfB['catfrac2']=dfB.apply(lambda x: calccatfrac2(x.categoryn2d, x.catDMfrac, 'B', colormin), axis=1)
+    dfD['catfrac2']=dfD.apply(lambda x: calccatfrac2(x.categoryn2d, x.catDMfrac, 'D', colormin), axis=1)
+    ABD=[dfA, dfB, dfD]
+    Cmap=plt.cm.viridis
+    
+    Norm=plt.Normalize(df[color].min(),df[color].max())
+    for i, dff in enumerate(ABD):
+        dff=dff.drop_duplicates(['z',y])
+        data=dff.pivot(y, 'z', 'catfrac2')
+        print(data)
+        ax[i].imshow(data, aspect='auto', cmap=Cmap, norm=Norm, origin='lower', extent=(df.z.min(), df.z.max(), df[y].min(), df[y].max()))
+        ax[i].set_xlabel('z')
+
+    ax[0].set_title('Asymmetrics'), ax[1].set_title('Bulges'), ax[2].set_title('Discs')
+    plt.xlim(df.z.min(), df.z.max()+0.1), plt.ylim(df[y].min(),df[y].max() -0.2)
+    ax[0].set_ylabel(r'$log(M_{halo})$ [$M_{\odot}$]')
+    plt.subplots_adjust(right=0.8, wspace=0, hspace=0)
+    cbar_ax=fig.add_axes([0.8,0.11,0.05,0.77])
+    sm=plt.cm.ScalarMappable(cmap=Cmap, norm=Norm)
+    sm.set_array([])
+    cbar=plt.colorbar(sm, cax=cbar_ax).set_label(r'$M_{halo}$ fraction in each component')
     plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/evolvingfrac'+y+''+cat+'colouredby'+color+'.png')
     plt.show()
 
@@ -1179,23 +1267,16 @@ def colourscatter(df,x,y, column_colour, thresh):
     sm.set_array([])
 
     #create pdf
-    n=10
-    py,y1=np.histogram(df[y], bins=n)
-    y1=y1[:-1]+(y1[1]-y1[0])/2
-    f=UnivariateSpline(y1,py,s=n)
-    axleft.plot(f(y1), y1)
-
-    px,x1=np.histogram(df[x], bins=n)
-    x1=x1[:-1]+(x1[1]-x1[0])/2
-    f=UnivariateSpline(x1,px,s=n)
-    axtop.plot(x1, f(x1))
+    N=len(df)
+    n=15
 
     axleft.set_xlabel('PDF')
     axtop.set_ylabel('PDF')
-    axleft.set_ylabel(y)
-    ax1.set_xlabel(x)
+    axleft.set_ylabel(r'$log(M_{gas} / M_{*})$')
+    ax1.set_xlabel(r'$z$')
 
     ax1.scatter(df[x],df[y], c=df[column_colour], cmap=Cmap, norm=Norm, alpha=0.5, s=10)
+    ax1.set_ylim(-4, 0.5)
     lowdf=df[df[column_colour]<thresh -0.1]
     highdf=df[df[column_colour]>thresh +0.1]
     dflist=[df, highdf, lowdf]
@@ -1203,6 +1284,17 @@ def colourscatter(df,x,y, column_colour, thresh):
     for i,df in enumerate(dflist):
         medianvals, binedgs, lowquart, uppquart, std=binvalue(df, x, y, 10)
         ax1.errorbar(binedgs, medianvals, color=cs[i], yerr=(std), fmt='', capsize=0.5, elinewidth=0.5)
+
+        py,y1=np.histogram(df[y], bins=n)
+        y1=y1[:-1]+(y1[1]-y1[0])/2
+        f=UnivariateSpline(y1,py,s=n)
+        axleft.plot(f(y1), y1, color=cs[i])
+
+        px,x1=np.histogram(df[x], bins=n)
+        x1=x1[:-1]+(x1[1]-x1[0])/2
+        f=UnivariateSpline(x1,px,s=n)
+        axtop.plot(x1, f(x1), color=cs[i])
+
 
     plt.subplots_adjust(right=0.8, wspace=0, hspace=0)
     cbar_ax=fig.add_axes([0.85,0.15,0.05,0.8])
@@ -1370,9 +1462,8 @@ def plotmergergasrate(df, cat, time):
     plt.show()
 
 def transformdata(df):
-    df=df[df.logDMmass>5]
+    df=df[df.z<3]
     df['lbtrounded']=df.apply(lambda x: -np.round(x.lbt, decimals=0), axis=1)
-    df['zplus1']=df.apply(lambda x: x.zrounded +1, axis=1)
     #f=df[df.num>12]
     df['Starmassmergerfrac']=df.apply(lambda x: zerotonancappedz(x.Starmassmergerfrac, x.z), axis=1)
     df['Starmergercategory']=df.apply(lambda x: classifymergermass(x.Starmassmergerfrac), axis=1)
@@ -1389,21 +1480,35 @@ def transformdata(df):
     df['logsSFR1']=df.apply(lambda x: logx(x.sSFR1), axis=1)
     df['sSFR3']=df.apply(lambda x: divide(x.SFR3,x.Starmass3), axis=1)
     df['logsSFR3']=df.apply(lambda x: logx(x.sSFR3), axis=1)
+    df['sSFR5']=df.apply(lambda x: divide(x.SFR5,x.Starmass5), axis=1)
+    df['logsSFR5']=df.apply(lambda x: logx(x.sSFR5), axis=1)
     df['sSFR10']=df.apply(lambda x: divide(x.SFR10,x.Starmass10), axis=1) 
     df['logsSFR10']=df.apply(lambda x: logx(x.sSFR10), axis=1)
+    df['sSFR20']=df.apply(lambda x: divide(x.SFR20,x.Starmass20), axis=1) 
+    df['logsSFR20']=df.apply(lambda x: logx(x.sSFR20), axis=1)
     
     df['SFR3m']=df.apply(lambda x: x.SFR3- x.SFR1, axis=1)
     df['Starmass3m']=df.apply(lambda x: x.Starmass3- x.Starmass1, axis=1)
     df['sSFR3m']=df.apply(lambda x: divide(x.SFR3m,x.Starmass3m), axis=1)
     df['logsSFR3m']=df.apply(lambda x: logx(x.sSFR3m), axis=1)
 
-    df['SFR10m']=df.apply(lambda x: x.SFR10- x.SFR3, axis=1)
-    df['Starmass10m']=df.apply(lambda x: x.Starmass10- x.Starmass3, axis=1)
+    df['SFR5m']=df.apply(lambda x: x.SFR5- x.SFR3, axis=1)
+    df['Starmass5m']=df.apply(lambda x: x.Starmass5- x.Starmass3, axis=1)
+    df['sSFR5m']=df.apply(lambda x: divide(x.SFR5m,x.Starmass5m), axis=1)
+    df['logsSFR5m']=df.apply(lambda x: logx(x.sSFR5m), axis=1)
+
+    df['SFR10m']=df.apply(lambda x: x.SFR10- x.SFR5, axis=1)
+    df['Starmass10m']=df.apply(lambda x: x.Starmass10- x.Starmass5, axis=1)
     df['sSFR10m']=df.apply(lambda x: divide(x.SFR10m,x.Starmass10m), axis=1)
     df['logsSFR10m']=df.apply(lambda x: logx(x.sSFR10m), axis=1)
 
-    df['SFR30m']=df.apply(lambda x: x.SFR- x.SFR10, axis=1)
-    df['Starmass30m']=df.apply(lambda x: x.Starmass- x.Starmass10, axis=1)
+    df['SFR20m']=df.apply(lambda x: x.SFR20- x.SFR10, axis=1)
+    df['Starmass20m']=df.apply(lambda x: x.Starmass20- x.Starmass10, axis=1)
+    df['sSFR20m']=df.apply(lambda x: divide(x.SFR20m,x.Starmass20m), axis=1)
+    df['logsSFR20m']=df.apply(lambda x: logx(x.sSFR20m), axis=1)
+
+    df['SFR30m']=df.apply(lambda x: x.SFR- x.SFR20, axis=1)
+    df['Starmass30m']=df.apply(lambda x: x.Starmass- x.Starmass20, axis=1)
     df['sSFR30m']=df.apply(lambda x: divide(x.SFR30m,x.Starmass30m), axis=1)
     df['logsSFR30m']=df.apply(lambda x: logx(x.sSFR30m), axis=1)
 
@@ -1416,83 +1521,276 @@ def transformdata(df):
     df['sSFR30mA']=df.apply(lambda x: divide(x.SFR30m, 30**3 - 10**3), axis=1)
     df['logsSFR30mA']=df.apply(lambda x: logx(x.sSFR30mA), axis=1)
     """
+    B2B, D2D, B2D, D2B, BDB, DBD = bulgetranslists(df, 'n2d', 1.4, 0.1)
+    df['transtypen2d']=df.apply(lambda x: bulgetrans(x.ProjGalaxyID, B2B, D2D, B2D, D2B, BDB, DBD), axis=1)
+
+    B2B, D2D, B2D, D2B, BDB, DBD = bulgetranslists(df, 'BulgeToTotal', 0.5, 0.05)
+    df['transtypeBTD']=df.apply(lambda x: bulgetrans(x.ProjGalaxyID, B2B, D2D, B2D, D2B, BDB, DBD), axis=1)
+    
+    df['n2d']=df.apply(lambda x: threshtonan(x.n2d, 0.4), axis=1)
+    df['n_total']=df.apply(lambda x: threshtonan(x.n_total, 0.4), axis=1)
+    df['logBHmass']=df.apply(lambda x: threshtonan(x.logBHmass, 0.01), axis=1)
+    df['logDMmass']=df.apply(lambda x: threshtonan(x.logDMmass, 1), axis=1)
+    #df.to_csv('evolvingEAGLEbulgediscmergedf'+sim_name+'.csv')
+    """
+    df['DMdensity200Area']=df.apply(lambda x: divide(x.M200DM,(4*np.pi * (x.R200DM ))), axis=1)
+    df['DMHalfMassdensityArea']=df.apply(lambda x: divide((x.DMmass *0.5), (4 * np.pi * ((x.DMHalfMassRad)))), axis=1)
+    df['DM500densityArea']=df.apply(lambda x: divide(x.M500DM, (4 * np.pi * ((x.R500DM)))), axis=1)
+    df['DM200meandensityArea']=df.apply(lambda x: divide(x.M200DMmean, (4 * np.pi * ((x.R200DMmean)))), axis=1)
+    
+    df['logM200DM']=df.apply(lambda x: logx(x.M200DM), axis=1)
+    df['logM500DM']=df.apply(lambda x: logx(x.M500DM), axis=1)
+    df['logM200DMmean']=df.apply(lambda x: logx(x.M200DMmean), axis=1)
+    df['logDMMass100AP']=df.apply(lambda x: logx(x.DMMass100AP), axis=1)
+
+    df['logR200DM']=df.apply(lambda x: logx(x.R200DM), axis=1)
+    df['logR500DM']=df.apply(lambda x: logx(x.R500DM), axis=1)
+    df['logR200DMmean']=df.apply(lambda x: logx(x.R200DMmean), axis=1)
+    df['logDMHalfMassRad']=df.apply(lambda x: logx(x.DMHalfMassRad), axis=1)
+
+    df['Stargasmergerfrac']=df.apply(lambda x: threshtonan2(x.Starmassmergerfrac, x.Stargasmergerfrac, 0.01), axis=1)
+    df=df.sort_values(by=['z'], ascending=False)
+    df['logsBHmass']=df.apply(lambda x: cutBHmass(x.logBHmass), axis=1)
+    df['dlbt']=df.groupby('ProjGalaxyID')['lookbacktime'].diff()
+    df['dz']=df.groupby('ProjGalaxyID')['z'].diff()
+
+    df['dlogBHmass']=df.groupby('ProjGalaxyID')['logBHmass'].diff()
+    df['dBHmass']=df.groupby('ProjGalaxyID')['BHmass'].diff()
+    df['dlogBHmassdt']=df.apply(lambda x: (x.dlogBHmass)/(x.dlbt), axis=1)
+    df['dBHmassdt']=df.apply(lambda x: (x.dBHmass)/(x.dlbt), axis=1)
+
+    
+    df['dM200DM']=df.groupby('ProjGalaxyID')['M200DM'].diff()
+    df['dM200DMdt']=df.apply(lambda x: (x.dM200DM)/(x.dlbt), axis=1)
+    df['logdM200DMdt']=df.apply(lambda x: logx(x.dM200DMdt), axis=1)
+    df['logDM200density']=df.apply(lambda x: logx(x.DM200density), axis=1)
+
+    df['dM500DM']=df.groupby('ProjGalaxyID')['M500DM'].diff()
+    df['dM500DMdt']=df.apply(lambda x: (x.dM500DM)/(x.dlbt), axis=1)
+    df['logdM500DMdt']=df.apply(lambda x: logx(x.dM500DMdt), axis=1)
+    df['logDM500density']=df.apply(lambda x: logx(x.DM500density), axis=1)
+
+    df['dM100APDM']=df.groupby('ProjGalaxyID')['DMMass100AP'].diff()
+    df['dM100APDMdt']=df.apply(lambda x: (x.dM100APDM)/(x.dlbt), axis=1)
+    df['logdM100APDMdt']=df.apply(lambda x: logx(x.dM100APDMdt), axis=1)
+    df['logDM100APdensity']=df.apply(lambda x: logx(x.DMAPdensity), axis=1)
+
+    df['dM200meanDM']=df.groupby('ProjGalaxyID')['M200DMmean'].diff()
+    df['dM200meanDMdt']=df.apply(lambda x: (x.dM200meanDM)/(x.dlbt), axis=1)
+    df['logdM200meanDMdt']=df.apply(lambda x: logx(x.dM200meanDMdt), axis=1)
+    df['logDM200meandensity']=df.apply(lambda x: logx(x.DM200meandensity), axis=1)
+
+    df['dMDM']=df.groupby('ProjGalaxyID')['DMmass'].diff()
+    df['dMDMdt']=df.apply(lambda x: (x.dMDM)/(x.dlbt), axis=1)
+    df['logdMDMdt']=df.apply(lambda x: logx(x.dMDMdt), axis=1)
+    df['logDMHalfMassdensity']=df.apply(lambda x: logx(x.DMHalfMassdensity), axis=1)
+
+
+    df['dR200DM']=df.groupby('ProjGalaxyID')['R200DM'].diff()
+    df['dR200DMdt']=df.apply(lambda x: (x.dR200DM)/(x.dlbt), axis=1)
+    df['logdR200DMdt']=df.apply(lambda x: logx(x.dR200DMdt), axis=1)
+
+    df['dR500DM']=df.groupby('ProjGalaxyID')['R500DM'].diff()
+    df['dR500DMdt']=df.apply(lambda x: (x.dR500DM)/(x.dlbt), axis=1)
+    df['logdR500DMdt']=df.apply(lambda x: logx(x.dR500DMdt), axis=1)
+
+    df['dR200meanDM']=df.groupby('ProjGalaxyID')['R200DMmean'].diff()
+    df['dR200meanDMdt']=df.apply(lambda x: (x.dR200meanDM)/(x.dlbt), axis=1)
+    df['logdR200meanDMdt']=df.apply(lambda x: logx(x.dR200meanDMdt), axis=1)
+   
+    df['dRhalfDM']=df.groupby('ProjGalaxyID')['DMHalfMassdensity'].diff()
+    df['dRhalfDMdt']=df.apply(lambda x: (x.dRhalfDM)/(x.dlbt), axis=1)
+    df['logdRhalfDMdt']=df.apply(lambda x: logx(x.dRhalfDMdt), axis=1)
+
+    #df['DMmassdtcorrea']=df.apply(lambda x: calchalorate(x.DMmass, x.z, x.dz), axis=1)
+    #df['logDMmassdtcorrea']=df.apply(lambda x: logx(x.DMmassdtcorrea), axis=1)
+    for name in ['DM200density', 'DMdensity200Area','DMHalfMassdensity','DMAPdensity', 'DM200meandensity','DMHalfMassdensityArea',  'DM200meandensityArea']:
+        grouped=df[['z', name]].groupby(['z']).agg({name:['median', 'std']})
+        grouped=grouped.xs(name, axis=1, drop_level=True)
+        df=pd.merge(df, grouped, on=['z'], how='left').drop_duplicates()
+        print(df.columns.values)
+        df=df.rename({'median':name+'_median', 'std':name+'_std'}, axis=1)
+        print(df.columns.values)
+    print(df.DM200density_std)
+    print(df.columns.values)
+    df['residDM200density']=df.apply(lambda x: divide((x.DM200density-x.DM200density_median),x.DM200density_std) , axis=1)
+    df['residDMdensity200Area']=df.apply(lambda x: divide((x.DMdensity200Area-x.DMdensity200Area_median),x.DMdensity200Area_std) , axis=1)
+    df['residDMHalfMassdensity']=df.apply(lambda x: divide((x.DMHalfMassdensity-x.DMHalfMassdensity_median),x.DMHalfMassdensity_std) , axis=1)
+    df['residDMHalfMassdensityArea']=df.apply(lambda x: divide((x.DMHalfMassdensityArea-x.DMHalfMassdensityArea_median),x.DMHalfMassdensityArea_std) , axis=1)
+    df['residDM200meandensity']=df.apply(lambda x: divide((x.DM200meandensity-x.DM200meandensity_median),x.DM200meandensity_std) , axis=1)
+    df['residDM200meandensityArea']=df.apply(lambda x: divide((x.DM200meandensityArea-x.DM200meandensityArea_median),x.DM200meandensityArea_std) , axis=1)
+    df['residDMAPdensity']=df.apply(lambda x: divide((x.DMAPdensity-x.DMAPdensity_median),x.DMAPdensity_std) , axis=1)
+    """
+    #df['logDMEllipticitypermass']=df.apply(lambda x: logx(x.DMEllipticitypermass), axis=1)
+    df['Concentration5200']=df.apply(lambda x: (divide(x.DMMass5,x.M200DM))**(1/3), axis=1)
+    df['Concentration530']=df.apply(lambda x: (divide(x.DMMass5,x.DMMass30))**(1/3), axis=1)
+    df['Concentration30200']=df.apply(lambda x: (divide(x.DMMass30,x.M200DM))**(1/3), axis=1)
+    df.to_csv('evolvingEAGLEbulgediscmergedf'+sim_name+'.csv')
 
     return df
     #df['vHsqrd']=df.apply(lambda x: divide(6.67*10e-11*x.M200, x.R200), axis=1)
 
-def plotSFRcircles(df, histparam1, histparam2, histparam3, histparam4, binparam, vmin, vmax, hparam):
+def plotSFRcircles(df, histparam1, histparam2, histparam3, histparam4,histparam5,histparam6, binparam, vmin, vmax, hparam, thresh, threshstep, trans, label, label2):
     z0df=df[df.zrounded==0.]
-    df=df[(df.zrounded==0.1) | (df.zrounded==0.5) | (df.zrounded==1.) | (df.zrounded==2.)]
+    df=df[(df.zrounded==0.1) | (df.zrounded==0.5) | (df.zrounded==1.0) | (df.zrounded==1.5)]
     z0df=z0df[['ProjGalaxyID', binparam]]
     z0df['marker_bin']=pd.qcut(z0df[binparam],8, labels=['10','30','40','50','70','80','90','100'])
     df=pd.merge(df, z0df, on=['ProjGalaxyID'], how='left',  suffixes=('','_proj'))
 
-
-    fig, axs =plt.subplots(12, 4, figsize=(6,10), gridspec_kw={'width_ratios':[4,4,4,0.5], 'height_ratios':[4,1.5,1,4,1.5,1,4,1.5,1,4,1.5,1]})
-
+    fig, axs =plt.subplots(12, 5, figsize=(6,10), gridspec_kw={'width_ratios':[4,4,4,4,0.5], 'height_ratios':[4,1.5,1,4,1.5,1,4,1.5,1,4,1.5,1]})
     fig.suptitle('Time evolution of historgram of '+histparam1+' showing distribution of '+binparam)
-    axs[0,0].set_title('10th Percentile')
-    axs[0,1].set_title('Median')
-    axs[0,2].set_title('90th Percentile')
-    maxcol=max(abs(df[histparam4].min()), abs(df[histparam4].max()))
+    axs[0,0].set_title('Constant Discs')
+    axs[0,1].set_title('B->D')
+    axs[0,2].set_title('D->B')
+    axs[0,3].set_title('Constant Bulges')
     Cmap=mcol.LinearSegmentedColormap.from_list("cmop", ['red','mediumorchid','blue'])
     #Cmap='seismic'
     norm=plt.Normalize(vmin,vmax)
 
-    for i1,zi in enumerate([0.1, 0.5, 1.0, 2.0]):
+    for i1,zi in enumerate([0.1, 0.5, 1.0, 1.5]):
         i=3*i1
         i2=i+1
         i3=i+2
         zdf=df[df.zrounded==zi]
-              
-        lowdf=zdf[zdf.marker_bin=='10']
-        middf=zdf[zdf.marker_bin=='50']
-        highdf=zdf[zdf.marker_bin=='100']
-        minn=min([lowdf[histparam1].median(),lowdf[histparam2].median(),lowdf[histparam3].median(),lowdf[histparam4].median(),middf[histparam1].median(),middf[histparam2].median(),middf[histparam3].median(),middf[histparam4].median(),highdf[histparam1].median(),highdf[histparam2].median(),highdf[histparam3].median(),highdf[histparam4].median()])
-        maxx=max([lowdf[histparam1].median(),lowdf[histparam2].median(),lowdf[histparam3].median(),lowdf[histparam4].median(),middf[histparam1].median(),middf[histparam2].median(),middf[histparam3].median(),middf[histparam4].median(),highdf[histparam1].median(),highdf[histparam2].median(),highdf[histparam3].median(),highdf[histparam4].median()])
+        #lowdf=zdf[zdf.marker_bin=='10']
+        Ddf=zdf[zdf[trans]=='D2D']
+        B2Ddf=zdf[(zdf[trans]=='B2D')| (zdf[trans]=='DBD')]
+        #B2Ddf=zdf[zdf.marker_bin=='10']
+        #B2ddf=zdf
+        D2Bdf=zdf[(zdf[trans]=='D2B')| (zdf[trans]=='BDB')]
+        #D2Bdf=zdf[zdf.marker_bin=='100']
+        #highdf=zdf[zdf.marker_bin=='100']
+        Bdf=zdf[zdf[trans]=='B2B']
+        minn=min([Ddf[histparam1].median(),Ddf[histparam2].median(),Ddf[histparam3].median(),Ddf[histparam4].median(),Ddf[histparam5].median(),Ddf[histparam6].median(),B2Ddf[histparam1].median(),B2Ddf[histparam2].median(),B2Ddf[histparam3].median(),B2Ddf[histparam4].median(),B2Ddf[histparam5].median(),B2Ddf[histparam6].median(),D2Bdf[histparam1].median(),D2Bdf[histparam2].median(),D2Bdf[histparam3].median(),D2Bdf[histparam4].median(),D2Bdf[histparam5].median(),D2Bdf[histparam6].median(), Bdf[histparam1].median(),Bdf[histparam2].median(),Bdf[histparam3].median(),Bdf[histparam4].median(),Bdf[histparam5].median(),Bdf[histparam6].median()])
+        maxx=max([Ddf[histparam1].median(),Ddf[histparam2].median(),Ddf[histparam3].median(),Ddf[histparam4].median(),Ddf[histparam5].median(),Ddf[histparam6].median(),B2Ddf[histparam1].median(),B2Ddf[histparam2].median(),B2Ddf[histparam3].median(),B2Ddf[histparam4].median(),B2Ddf[histparam5].median(),B2Ddf[histparam6].median(),D2Bdf[histparam1].median(),D2Bdf[histparam2].median(),D2Bdf[histparam3].median(),D2Bdf[histparam4].median(),D2Bdf[histparam5].median(),D2Bdf[histparam6].median(), Bdf[histparam1].median(),Bdf[histparam2].median(),Bdf[histparam3].median(),Bdf[histparam4].median(),Bdf[histparam5].median(),Bdf[histparam6].median()])
         norm=plt.Normalize(minn, maxx)
         sm=plt.cm.ScalarMappable(cmap=Cmap, norm=norm)
         sm.set_array([])
-        cbar=fig.colorbar(sm, cax=axs[i,3]).set_label('logsSFR')
+        cbar=fig.colorbar(sm, cax=axs[i,4]).set_label(label)
         print(i1,i,i2,i3)
         binedgs1=np.linspace(df[hparam].min(), df[hparam].max(), 30)
         
-        for j,df2 in enumerate([lowdf, middf, highdf]):
-            axs[i,j].set_xlim(0, 60)
-            axs[i,j].set_ylim(0, 60)
+        for j,df2 in enumerate([Ddf, B2Ddf, D2Bdf, Bdf]):
+            axs[i,j].set_xlim(-30, 30)
+            axs[i,j].set_ylim(-30, 30)
             axs[i3,j].remove()
-            axs[i3,3].set_visible(False)
-            axs[i2,3].set_visible(False)        
-
-            """
-            color1=np.round(abs(df2[histparam1].median())/maxcol, decimals=1)
-            color3=np.round(abs(df2[histparam2].median())/maxcol, decimals=1)
-            color10=np.round(abs(df2[histparam3].median())/maxcol, decimals=1)
-            color30=np.round(abs(df2[histparam4].median())/maxcol, decimals=1)
-            """
+            axs[i3,4].set_visible(False)
+            axs[i2,4].set_visible(False)        
             
             #Cmap='seismic'
             color1=df2[histparam1].median()
             color3=df2[histparam2].median()
-            color10=df2[histparam3].median()
-            color30=df2[histparam4].median()
+            color5=df2[histparam3].median()
+            color10=df2[histparam4].median()
+            color20=df2[histparam5].median()
+            color30=df2[histparam6].median()
 
-            circle1=plt.Circle((30,30), 2, color=Cmap(norm(color1)))
-            circle3=plt.Circle((30,30), 5, color=Cmap(norm(color3)))
-            circle10=plt.Circle((30,30), 15, color=Cmap(norm(color10)))
-            circle30=plt.Circle((30,30), 30, color=Cmap(norm(color30)))
+            circle1=plt.Circle((0,0), 2, color=Cmap(norm(color1)))
+            circle3=plt.Circle((0,0), 5, color=Cmap(norm(color3)))
+            circle5=plt.Circle((0,0), 8, color=Cmap(norm(color5)))
+            circle10=plt.Circle((0,0), 14, color=Cmap(norm(color10)))
+            circle20=plt.Circle((0,0), 22, color=Cmap(norm(color20)))
+            circle30=plt.Circle((0,0), 30, color=Cmap(norm(color30)))
             axs[i,j].add_artist(circle30)
+            axs[i,j].add_artist(circle20)
             axs[i,j].add_artist(circle10)
+            axs[i,j].add_artist(circle5)
             axs[i,j].add_artist(circle3)
             axs[i,j].add_artist(circle1)
             axs[i,j].set_xlabel('')
             axs[i,j].set_ylabel('')
             
             axs[i2,j].hist(zdf[hparam], color="k", alpha=0.4,label='z='+str(zi), histtype='stepfilled', bins=binedgs1)
-            axs[i2,0].hist(lowdf[hparam], color="b", alpha=0.5, histtype='step', bins=binedgs1)
-            axs[i2,1].hist(middf[hparam], color="purple", alpha=0.5, histtype='step', bins=binedgs1)
-            axs[i2,2].hist(highdf[hparam], color="r", alpha=0.5, histtype='step', bins=binedgs1)
-            axs[10,j].set_xlabel(hparam)
+            axs[i2,0].hist(Ddf[hparam], color="b", alpha=0.5, histtype='step', bins=binedgs1)
+            axs[i2,1].hist(B2Ddf[hparam], color="purple", alpha=0.5, histtype='step', bins=binedgs1)
+            axs[i2,2].hist(D2Bdf[hparam], color="purple", alpha=0.5, histtype='step', bins=binedgs1)
+            axs[i2,3].hist(Bdf[hparam], color="r", alpha=0.5, histtype='step', bins=binedgs1)
+            axs[10,j].set_xlabel(label2)
+
+            axs[i,j].set_xticks([])
+            axs[i,1].set_yticks([])
+            axs[i,2].set_yticks([])
+            axs[i,3].set_yticks([])
+            axs[i2,1].set_yticks([])
+            axs[i2,2].set_yticks([])
+            axs[i2,3].set_yticks([])
+
+        axs[i2,0].set_ylabel('z='+str(zi))
+        axs[i,0].set_ylabel('Extent')
+
+    plt.subplots_adjust(right=0.8, wspace=0, hspace=0)
+    
+    plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/'+histparam4+'circleplot4'+binparam+'.png')
+    plt.show()
+
+def plotSFRcircles3(df, histparam1, histparam2, histparam3, histparam4,histparam5,histparam6, binparam, vmin, vmax, hparam, thresh, threshstep, trans, label1, label2):
+    z0df=df[df.zrounded==0.]
+    df=df[(df.zrounded==0.1) | (df.zrounded==0.5) | (df.zrounded==1.0) | (df.zrounded==1.5)]
+    z0df=z0df[['ProjGalaxyID', binparam]]
+    z0df['marker_bin']=pd.qcut(z0df[binparam],8, labels=['10','30','40','50','70','80','90','100'])
+    df=pd.merge(df, z0df, on=['ProjGalaxyID'], how='left',  suffixes=('','_proj'))
+
+    fig, axs =plt.subplots(12, 4, figsize=(6,10), gridspec_kw={'width_ratios':[4,4,4,0.5], 'height_ratios':[4,1.5,1,4,1.5,1,4,1.5,1,4,1.5,1]})
+    fig.suptitle('Time evolution of historgram of '+histparam1+' showing distribution of '+binparam)
+    axs[0,0].set_title('10th')
+    axs[0,1].set_title('Median')
+    axs[0,2].set_title('90th')
+ 
+    Cmap=mcol.LinearSegmentedColormap.from_list("cmop", ['red','mediumorchid','blue'])
+    norm=plt.Normalize(vmin,vmax)
+
+    for i1,zi in enumerate([0.1, 0.5, 1.0, 1.5]):
+        i=3*i1
+        i2=i+1
+        i3=i+2
+        zdf=df[df.zrounded==zi]
+        Adf=zdf[zdf.marker_bin=='10']
+        Bdf=zdf[zdf.marker_bin=='50']
+        Cdf=zdf[zdf.marker_bin=='100']
+        minn=min([Adf[histparam1].median(),Adf[histparam2].median(),Adf[histparam3].median(),Adf[histparam4].median(),Adf[histparam5].median(),Adf[histparam6].median(),Bdf[histparam1].median(),Bdf[histparam2].median(),Bdf[histparam3].median(),Bdf[histparam4].median(),Bdf[histparam5].median(),Bdf[histparam6].median(),Cdf[histparam1].median(),Cdf[histparam2].median(),Cdf[histparam3].median(),Cdf[histparam4].median(),Cdf[histparam5].median(),Cdf[histparam6].median()])
+        maxx=max([Adf[histparam1].median(),Adf[histparam2].median(),Adf[histparam3].median(),Adf[histparam4].median(),Adf[histparam5].median(),Adf[histparam6].median(),Bdf[histparam1].median(),Bdf[histparam2].median(),Bdf[histparam3].median(),Bdf[histparam4].median(),Bdf[histparam5].median(),Bdf[histparam6].median(),Cdf[histparam1].median(),Cdf[histparam2].median(),Cdf[histparam3].median(),Cdf[histparam4].median(),Cdf[histparam5].median(),Cdf[histparam6].median()])
+        norm=plt.Normalize(minn, maxx)
+        sm=plt.cm.ScalarMappable(cmap=Cmap, norm=norm)
+        sm.set_array([])
+        cbar=fig.colorbar(sm, cax=axs[i,3]).set_label(label1)
+        print(i1,i,i2,i3)
+        binedgs1=np.linspace(df[hparam].min(), df[hparam].max(), 30)
+        
+        for j,df2 in enumerate([Adf, Bdf, Cdf]):
+            axs[i,j].set_xlim(-30, 30)
+            axs[i,j].set_ylim(-30, 30)
+            axs[i3,j].remove()
+            axs[i3,3].set_visible(False)
+            axs[i2,3].set_visible(False)        
+            
+            #Cmap='seismic'
+            color1=df2[histparam1].median()
+            color3=df2[histparam2].median()
+            color5=df2[histparam3].median()
+            color10=df2[histparam4].median()
+            color20=df2[histparam5].median()
+            color30=df2[histparam6].median()
+
+            circle1=plt.Circle((0,0), 2, color=Cmap(norm(color1)))
+            circle3=plt.Circle((0,0), 5, color=Cmap(norm(color3)))
+            circle5=plt.Circle((0,0), 8, color=Cmap(norm(color5)))
+            circle10=plt.Circle((0,0), 14, color=Cmap(norm(color10)))
+            circle20=plt.Circle((0,0), 22, color=Cmap(norm(color20)))
+            circle30=plt.Circle((0,0), 30, color=Cmap(norm(color30)))
+            axs[i,j].add_artist(circle30)
+            axs[i,j].add_artist(circle20)
+            axs[i,j].add_artist(circle10)
+            axs[i,j].add_artist(circle5)
+            axs[i,j].add_artist(circle3)
+            axs[i,j].add_artist(circle1)
+            axs[i,j].set_xlabel('')
+            axs[i,j].set_ylabel('')
+            
+            axs[i2,j].hist(zdf[hparam], color="k", alpha=0.4,label='z='+str(zi), histtype='stepfilled', bins=binedgs1)
+            axs[i2,0].hist(Adf[hparam], color="b", alpha=0.5, histtype='step', bins=binedgs1)
+            axs[i2,1].hist(Bdf[hparam], color="purple", alpha=0.5, histtype='step', bins=binedgs1)
+            axs[i2,2].hist(Cdf[hparam], color="r", alpha=0.5, histtype='step', bins=binedgs1)
+            axs[10,j].set_xlabel(label2)
 
             axs[i,j].set_xticks([])
             axs[i,1].set_yticks([])
@@ -1500,32 +1798,13 @@ def plotSFRcircles(df, histparam1, histparam2, histparam3, histparam4, binparam,
             axs[i2,1].set_yticks([])
             axs[i2,2].set_yticks([])
 
-            axs[i,1].set_yticks([])
-            axs[i,2].set_yticks([])
-        
         axs[i2,0].set_ylabel('z='+str(zi))
-        axs[i,0].set_ylabel('Radius')
-        axs[i,2].legend()
-        
+        axs[i,0].set_ylabel('Extent')
+
     plt.subplots_adjust(right=0.8, wspace=0, hspace=0)
     
-    #handles, labels = axs[3].get_legend_handles_labels()
-    #fig.legend(handles, labels, loc='lower center')
-    #plt.tight_layout()
-    #plt.subplots_adjust(right=0.8)
-    #cbar_ax=fig.add_axes([0.85,0.15,0.05,0.8])
-    
-    plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/'+histparam4+'circleplot'+binparam+'.png')
+    plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/'+histparam4+'circleplot3'+binparam+'.png')
     plt.show()
-
-def cutBHmass(x):
-    if x>0:
-        if x<4.5:
-            return np.nan
-        else:
-            return x
-    else:
-        return x
 
 def plotSFRpergalaxy(df):
     #zmin=df.z.min()
@@ -1533,7 +1812,6 @@ def plotSFRpergalaxy(df):
     z0df=df[df.zrounded==0.]
     df=df[(df.zrounded==0.1) | (df.zrounded==0.5) | (df.zrounded==1.0) | (df.zrounded==2.0)]
     
-
     fig, axs =plt.subplots(4, 2, sharex=True, figsize=(9,6))
     fig.suptitle('Time evolution of historgram of  showing distribution of ')
     axs[0,0].set_title('0-10th percentile of ')
@@ -1557,57 +1835,587 @@ def plotSFRpergalaxy(df):
     #plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/Histogramof'+histparam+'highlighted'+binparam+'.png')
     plt.show()
 
+def evolutionplot3(df, param0, param1, param2, colorparam, thresh, merger, mergername, mergername2):
+    fig, ax =plt.subplots(3, 4, sharey='row',sharex=True, figsize=(12,6))
+    Cmap=mcol.LinearSegmentedColormap.from_list("cmop", ['tomato','cornflowerblue'])
+    Norm=plt.Normalize(df[colorparam].min(),df[colorparam].max())
+    B2B=df[df.transtypen2d=='B2B']
+    D2D=df[df.transtypen2d=='D2D']
+    B2D=df[df.transtypen2d=='B2D']
+    D2B=df[df.transtypen2d=='D2B']
+
+    for id in B2B.ProjGalaxyID.unique():
+        temp=df[df.ProjGalaxyID==id]
+        x=temp.lbt.values
+        t=temp[colorparam].values
+        for i, param in enumerate([param0, param1, param2]):
+            y=temp[param].values
+            points=np.array([x,y]).T.reshape(-1,1,2)
+            segments=np.concatenate([points[:-1], points[1:]], axis=1)
+            lc=LineCollection(segments, cmap=Cmap, norm=Norm)
+            lc.set_array(t)
+            lc.set_linewidth(0.5)
+            ax[i,0].add_collection(lc)
+            dfmergetemp=temp[temp[mergername]>0.]
+            ax[i,0].scatter(dfmergetemp.lbt, dfmergetemp[param], c=dfmergetemp[merger], s=3)
+    ax[0,0].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'k--', linewidth=1)
+    ax[1,0].plot([df.lbt.min(),df.lbt.max()], [12.2,12.2], 'k--', linewidth=1)
+    #ax[2,0].plot([df.lbt.min(),df.lbt.max()], [0,0], 'k--', linewidth=1)
+
+    for id in D2D.ProjGalaxyID.unique():
+        temp=df[df.ProjGalaxyID==id]
+        x=temp.lbt.values
+        t=temp[colorparam].values
+        for i, param in enumerate([param0, param1, param2]):
+            y=temp[param].values
+            points=np.array([x,y]).T.reshape(-1,1,2)
+            segments=np.concatenate([points[:-1], points[1:]], axis=1)
+            lc=LineCollection(segments, cmap=Cmap, norm=Norm)
+            lc.set_array(t)
+            lc.set_linewidth(0.5)
+            ax[i,1].add_collection(lc)
+            dfmergetemp=temp[temp[mergername]>0.]
+            ax[i,1].scatter(dfmergetemp.lbt, dfmergetemp[param], c=dfmergetemp[merger], s=3)
+    ax[0,1].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'k--', linewidth=1)
+    ax[1,1].plot([df.lbt.min(),df.lbt.max()], [12.2,12.2], 'k--', linewidth=1)
+    #ax[2,1].plot([df.lbt.min(),df.lbt.max()], [0,0], 'k--', linewidth=1)
+
+    for id in B2D.ProjGalaxyID.unique():
+        temp=df[df.ProjGalaxyID==id]
+        x=temp.lbt.values
+        t=temp[colorparam].values
+        for i, param in enumerate([param0, param1, param2]):
+            y=temp[param].values
+            points=np.array([x,y]).T.reshape(-1,1,2)
+            segments=np.concatenate([points[:-1], points[1:]], axis=1)
+            lc=LineCollection(segments, cmap=Cmap, norm=Norm)
+            lc.set_array(t)
+            lc.set_linewidth(0.5)
+            ax[i,2].add_collection(lc)
+            dfmergetemp=temp[temp[mergername]>0.]
+            ax[i,2].scatter(dfmergetemp.lbt, dfmergetemp[param], c=dfmergetemp[merger], s=3)
+    ax[0,2].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'k--', linewidth=1)
+    ax[1,2].plot([df.lbt.min(),df.lbt.max()], [12.2,12.2], 'k--', linewidth=1)
+    #ax[2,2].plot([df.lbt.min(),df.lbt.max()], [0,0], 'k--', linewidth=1)
+
+    for id in D2B.ProjGalaxyID.unique():
+        temp=df[df.ProjGalaxyID==id]
+        x=temp.lbt.values
+        t=temp[colorparam].values
+        for i, param in enumerate([param0, param1, param2]):
+            y=temp[param].values
+            points=np.array([x,y]).T.reshape(-1,1,2)
+            segments=np.concatenate([points[:-1], points[1:]], axis=1)
+            lc=LineCollection(segments, cmap=Cmap, norm=Norm)
+            lc.set_array(t)
+            lc.set_linewidth(0.5)
+            ax[i,3].add_collection(lc)
+            dfmergetemp=temp[temp[mergername]>0.]
+            ax[i,3].scatter(dfmergetemp.lbt, dfmergetemp[param], c=dfmergetemp[merger], s=3)
+    ax[0,3].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'k--', linewidth=1)
+    ax[1,3].plot([df.lbt.min(),df.lbt.max()], [12.2,12.2], 'k--', linewidth=1)
+    #ax[2,3].plot([df.lbt.min(),df.lbt.max()], [0,0], 'k--', linewidth=1)
+    
+    legendelements=[]
+    for color in df[merger].unique():
+        temp=df[df[merger]==color]
+        for colorname in temp[mergername2].unique():
+            legendelements.append(Line2D([0],[0], marker='o', color='w', label=colorname, markerfacecolor=color, markersize=10))
+    ax[1,0].legend(handles=legendelements, bbox_to_anchor=(-0.2, 1.1))
+    
+    ax[0,0].set_title('B'),ax[0,1].set_title('D'),ax[0,2].set_title('B2D'), ax[0,3].set_title('D2B')
+    ax[2,2].set_xlabel('look back time (Gyr)')
+    ax[0,0].set_ylabel(r'n2d'), ax[1,0].set_ylabel(r'log($M_{halo})$ [$M_{\odot}$]'), ax[2,0].set_ylabel(r'log($\frac{M_{halo}}{dt})$ [$M_{\odot}Gyr^{-1}$]')
+    ax[0,0].set_xlim(df.lbt.min(), df.lbt.max())
+    plt.subplots_adjust(right=0.8, wspace=0.1, hspace=0)
+    cbar_ax=fig.add_axes([0.85,0.15,0.05,0.8])
+    sm=plt.cm.ScalarMappable(cmap=Cmap, norm=Norm)
+    sm.set_array([])
+    cbar=plt.colorbar(sm, cax=cbar_ax).set_label(r'residual of sSFR per mass per z [$M_{\odot} Gyr^{-1}$]')
+    plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/Evolution of'+str(param0)+str(param1)+str(param2)+str(mergername)+'.png')
+    plt.show()
+    plt.close()
+
+def evolutionplot4(df, param0, name0, param1,name1, param2, name2,param3,name3, colorparam, thresh, merger, mergername, mergername2):
+    fig, ax =plt.subplots(4, 4, sharey='row',sharex=True, figsize=(12,6))
+    Cmap=mcol.LinearSegmentedColormap.from_list("cmop", ['tomato','cornflowerblue'])
+    Norm=plt.Normalize(df[colorparam].min(),df[colorparam].max())
+    B2B=df[df.transtypen2d=='B2B']
+    D2D=df[df.transtypen2d=='D2D']
+    B2D=df[df.transtypen2d=='B2D']
+    D2B=df[df.transtypen2d=='D2B']
+
+
+    for id in B2B.ProjGalaxyID.unique():
+        temp=df[df.ProjGalaxyID==id]
+        x=temp.lbt.values
+        t=temp[colorparam].values
+        for i, param in enumerate([param0, param1, param2, param3]):
+            y=temp[param].values
+            points=np.array([x,y]).T.reshape(-1,1,2)
+            segments=np.concatenate([points[:-1], points[1:]], axis=1)
+            lc=LineCollection(segments, cmap=Cmap, norm=Norm)
+            lc.set_array(t)
+            lc.set_linewidth(0.5)
+            ax[i,0].add_collection(lc)
+            dfmergetemp=temp[temp[mergername]>0.]
+            ax[i,0].scatter(dfmergetemp.lbt, dfmergetemp[param], c=dfmergetemp[merger], s=3)
+    ax[0,0].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'k--', linewidth=1)
+    ax[1,0].plot([df.lbt.min(),df.lbt.max()], [5.1,5.1], 'k--', linewidth=1)
+    #ax[2,0].plot([df.lbt.min(),df.lbt.max()], [0.3,0.3], 'k--', linewidth=1)
+    ax[3,0].plot([df.lbt.min(),df.lbt.max()], [0.2*1e8,0.2*1e8], 'k--', linewidth=1)
+    
+
+    for id in D2D.ProjGalaxyID.unique():
+        temp=df[df.ProjGalaxyID==id]
+        x=temp.lbt.values
+        t=temp[colorparam].values
+        for i, param in enumerate([param0, param1, param2,param3]):
+            y=temp[param].values
+            points=np.array([x,y]).T.reshape(-1,1,2)
+            segments=np.concatenate([points[:-1], points[1:]], axis=1)
+            lc=LineCollection(segments, cmap=Cmap, norm=Norm)
+            lc.set_array(t)
+            lc.set_linewidth(0.5)
+            ax[i,1].add_collection(lc)
+            dfmergetemp=temp[temp[mergername]>0.]
+            ax[i,1].scatter(dfmergetemp.lbt, dfmergetemp[param], c=dfmergetemp[merger], s=3)
+    ax[0,1].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'k--', linewidth=1)
+    ax[1,1].plot([df.lbt.min(),df.lbt.max()], [5.1,5.1], 'k--', linewidth=1)
+    #ax[2,1].plot([df.lbt.min(),df.lbt.max()], [0.3,0.3], 'k--', linewidth=1)
+    ax[3,1].plot([df.lbt.min(),df.lbt.max()], [0.2*1e8,0.2*1e8], 'k--', linewidth=1)
+    
+
+    for id in B2D.ProjGalaxyID.unique():
+        temp=df[df.ProjGalaxyID==id]
+        x=temp.lbt.values
+        t=temp[colorparam].values
+        for i, param in enumerate([param0, param1, param2, param3]):
+            y=temp[param].values
+            points=np.array([x,y]).T.reshape(-1,1,2)
+            segments=np.concatenate([points[:-1], points[1:]], axis=1)
+            lc=LineCollection(segments, cmap=Cmap, norm=Norm)
+            lc.set_array(t)
+            lc.set_linewidth(0.5)
+            ax[i,2].add_collection(lc)
+            dfmergetemp=temp[temp[mergername]>0.]
+            ax[i,2].scatter(dfmergetemp.lbt, dfmergetemp[param], c=dfmergetemp[merger], s=3)
+    ax[0,2].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'k--', linewidth=1)
+    ax[1,2].plot([df.lbt.min(),df.lbt.max()], [5.1,5.1], 'k--', linewidth=1)
+    #ax[2,2].plot([df.lbt.min(),df.lbt.max()], [0.3,0.3], 'k--', linewidth=1)
+    ax[3,2].plot([df.lbt.min(),df.lbt.max()], [0.2*1e8,0.2*1e8], 'k--', linewidth=1)
+    
+    for id in D2B.ProjGalaxyID.unique():
+        temp=df[df.ProjGalaxyID==id]
+        x=temp.lbt.values
+        t=temp[colorparam].values
+        for i, param in enumerate([param0, param1, param2,param3]):
+            y=temp[param].values
+            points=np.array([x,y]).T.reshape(-1,1,2)
+            segments=np.concatenate([points[:-1], points[1:]], axis=1)
+            lc=LineCollection(segments, cmap=Cmap, norm=Norm)
+            lc.set_array(t)
+            lc.set_linewidth(0.5)
+            ax[i,3].add_collection(lc)
+            dfmergetemp=temp[temp[mergername]>0.]
+            ax[i,3].scatter(dfmergetemp.lbt, dfmergetemp[param], c=dfmergetemp[merger], s=3)
+    ax[0,3].plot([df.lbt.min(),df.lbt.max()], [thresh,thresh], 'k--', linewidth=1)
+    ax[1,3].plot([df.lbt.min(),df.lbt.max()], [5.1,5.1], 'k--', linewidth=1)
+    #ax[2,3].plot([df.lbt.min(),df.lbt.max()], [0.3,0.3], 'k--', linewidth=1)
+    ax[3,3].plot([df.lbt.min(),df.lbt.max()], [0.2*1e8,0.2*1e8], 'k--', linewidth=1)
+    
+
+    legendelements=[]
+    for color in df[merger].unique():
+        temp=df[df[merger]==color]
+        for colorname in temp[mergername2].unique():
+            legendelements.append(Line2D([0],[0], marker='o', color='w', label=colorname, markerfacecolor=color, markersize=10))
+    ax[0,0].legend(handles=legendelements, bbox_to_anchor=(-0.2, 1.1))
+    
+    ax[0,0].set_title('B'),ax[0,1].set_title('D'),ax[0,2].set_title('B2D'), ax[0,3].set_title('D2B')
+    ax[3,2].set_xlabel('look back time (Gyr)')
+    ax[0,0].set_ylabel(name0) 
+    ax[1,0].set_ylabel(name1) 
+    ax[2,0].set_ylabel(name2)
+    ax[3,0].set_ylabel(name3)
+    ax[0,0].set_xlim(df.lbt.min(), df.lbt.max())
+    plt.subplots_adjust(right=0.8, wspace=0.1, hspace=0)
+    cbar_ax=fig.add_axes([0.85,0.15,0.05,0.8])
+    sm=plt.cm.ScalarMappable(cmap=Cmap, norm=Norm)
+    sm.set_array([])
+    cbar=plt.colorbar(sm, cax=cbar_ax).set_label(r'residual of sSFR per mass per z [$M_{\odot} Gyr^{-1}$]')
+    plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/Evolution of'+str(param0)+str(param1)+str(param2)+str(param3)+str(mergername)+'.png')
+    #plt.show()
+    plt.close()
+
+def evolutionplot2(df, param1, param2, param3):
+    fig, ax=plt.subplots(3,4, sharex=True)
+
+    for i,typ in enumerate(['B2B', 'D2D', 'B2D', 'D2B']):
+        temp=df[df.transtypen2d==typ]
+        sns.lineplot(x='z',y=param1, hue='ProjGalaxyID',data=temp, palette=sns.color_palette('hls', temp.ProjGalaxyID.nunique()), ax=ax[0,i], legend=False, linewidth=0.8)
+        sns.lineplot(x='z',y=param2, hue='ProjGalaxyID',data=temp, palette=sns.color_palette('hls', temp.ProjGalaxyID.nunique()), ax=ax[1,i], legend=False, linewidth=0.8)
+        sns.lineplot(x='z',y=param3, hue='ProjGalaxyID',data=temp, palette=sns.color_palette('hls', temp.ProjGalaxyID.nunique()), ax=ax[2,i], legend=False, linewidth=0.8)
+        ax[0,i].set_title(typ)
+        ax[2,i].set_xlabel('z')
+    ax[0,0].set_ylabel(param1)
+    ax[0,1].set_ylabel(param2)
+    ax[0,2].set_ylabel(param3)
+    plt.subplots_adjust(wspace=0.1, hspace=0)
+    plt.legend(bbox_to_anchor=(1.1,0.8), loc='center left')
+    plt.xlim(0,3)
+    plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/evolution of'+param1+param2+param3+'.png')
+    plt.show()
+
+def calchalorate(mhalo, z, zdiff):
+    rate= 7e10*(mhalo/ 10e12)*(0.51 +(0.75*z))*((abs(zdiff))**1.5)
+    return rate
+
 def plotbulgetodisc(df, sim_name):
-    #df=df[df.n2d>0.5]
-    df=df[df.z<3]
-    df=transformdata(df)
-    df=df[df.logBHmass>0]
-    #df=df[df.logsSFR30m<0]
-    #df=df[df.logsSFR3m<0]
-    #df=df[df.logsSFR1<0]
-    #df=df[df.logsSFR10m<0]
-    
-    plotSFRcircles(df,'logsSFR1','logsSFR3m','logsSFR10m','logsSFR30m', 'n2d', -12,  -7, 'logsDMmass')
-    exit()
-    
-    plotmovinghistogram4(df,'logsSFR1','logsSFR3m','logsSFR10m','logsSFR30m', 'n2d')
-   
-    exit()
-
-    
-    """
-    df['logsBHmass']=df.apply(lambda x: cutBHmass(x.logBHmass), axis=1)
-    df['dBHmass']=df.groupby('ProjGalaxyID')['BHmass'].diff()
-    df['dlbt']=df.groupby('ProjGalaxyID')['lookbacktime'].diff()
-    df['dBHmassdt']=df.apply(lambda x: (x.dBHmass)/(x.dlbt), axis=1)
-    df['dDMmass']=df.groupby('ProjGalaxyID')['DMmass'].diff()
-    df['dDMmassdt']=df.apply(lambda x: (x.dDMmass)/(x.dlbt), axis=1)
-    plotmovingquantiles(df, 'logmass', 'dDMmassdt', 'n2d')
-    plotmovingquantiles(df, 'logmass', 'dBHmassdt', 'n2d')
-    """
-    
-
+    #df=transformdata(df)
+    df=df[df.M200DM>0]
+    df=df[df.n2d>0.5]
     print(df.columns.values)
+    df['roundBHmass2']=df.apply(lambda x: (np.round(x.logBHmass*5, decimals=1)/5), axis=1)
+    df['roundBHmass']=df.apply(lambda x: (np.round(x.logBHmass*2, decimals=1)/2), axis=1)
+    df['BHcounts']=df.groupby(['zrounded', 'roundBHmass'])['ProjGalaxyID'].transform('size')
+    df['catBHcounts']=df.groupby(['zrounded','categoryn', 'roundBHmass'])['ProjGalaxyID'].transform('size')
+    df['catBHfrac']=df.apply(lambda x: x.catBHcounts/x.BHcounts, axis=1)
+
+    df['roundDMmass2']=df.apply(lambda x: (np.round(x.logDMmass*2, decimals=1)/2), axis=1)
+    df['roundDMmass']=df.apply(lambda x: (np.round(x.logDMmass, decimals=1)), axis=1)
+    df['DMcounts']=df.groupby(['zrounded', 'roundDMmass'])['ProjGalaxyID'].transform('size')
+    df['catDMcounts']=df.groupby(['zrounded','categoryn', 'roundDMmass'])['ProjGalaxyID'].transform('size')
+    df['catDMfrac']=df.apply(lambda x: x.catDMcounts/x.DMcounts, axis=1)
+
+    plotfrac(df,'roundlogmass2', 'categoryn2d', 'catfrac')
+    exit()
+    #plotfrac(df,'roundsSFR2', 'categoryn2d', 'catsfrfrac')
+    #plotfrac(df,'roundBHmass', 'categoryn2d', 'catBHfrac')
+    #plotfrac(df,'roundDMmass2', 'categoryn2d', 'catDMfrac')
+    
+
+
+    plotbulgedisctranscolour(ndf,1,'n2d','logsSFRpermass',1.5,0.1)
+    plotbulgedisctranscolour(ndf,1.5,'n2d','logsSFRpermass',1.5,0.1)
+    #plotbulgedisctranscolour(df,1,'BulgeToTotal','logsSFRpermass',0.5,0.05)
+    exit()
+    df=df[df.n_total>0.5]
+    df=df[df.z<1.5]
+    df['num']= df.groupby('ProjGalaxyID')['ProjGalaxyID'].transform('count')
+    df=df[df.num>9] 
+    df=df[df.num<11] 
+    
+    specificgalaxyplot(df, 1298133, 'BulgeToTotal', 'n2d', 'logsSFR', 'logmass')
+    exit()
+    
+    
+    print(df.ProjGalaxyID.unique())
+    print(df.columns.values)
+    for id1 in df.ProjGalaxyID.unique():
+        specificgalaxyplot(df, id1, 'BulgeToTotal', 'n2d', 'logsSFR', 'logmass')
+    
+    exit()
+    #df['catn2d15']=df.apply(lambda x: categorise(x.asymm, x.n2d, 1.5, 0.3),axis=1)
+    #df['catn2d14']=df.apply(lambda x: categorise(x.asymm, x.n2d, 1.4, 0.31),axis=1)
+    #df['catn2d16']=df.apply(lambda x: categorise(x.asymm, x.n2d, 1.6, 0.29),axis=1)
+    #categorybarchart(df, 'catn2d15', 'catn2d14', 'catn2d16')
+    
+    #plotbulgedisctranscolour(df,1.5,'n2d','logsSFRpermass',1.5,0.1)
+    plotbulgedisctranscolourmerger(df,1.5,'n2d','logsSFRpermass','starmasscol','Starmassmergerfrac', 'Starmergercategory', 1.5, 0.1)
+    plotbulgedisctranscolourmerger(df,1.5,'n2d','logsSFRpermass','stargascol','Stargasmergerfrac', 'stargasmergercategory', 1.5, 0.1)
+
+    
+    
+    df['M200DM']=df.apply(lambda x: 10**(x.logM200DM), axis=1)
+    df['M500DM']=df.apply(lambda x: 10**(x.logM500DM), axis=1)
+    df['M200DMmean']=df.apply(lambda x: 10**(x.logM200DMmean), axis=1)
+    df['DMMass100AP']=df.apply(lambda x: 10**(x.logDMMass100AP), axis=1)
+    df['R200DM']=df.apply(lambda x: 10**(x.logR200DM), axis=1)
+    df['R500DM']=df.apply(lambda x: 10**(x.logR500DM), axis=1)
+    df['DMHalfMassRad']=df.apply(lambda x: 10**(x.logDMHalfMassRad), axis=1)
+    
+    df=df[df.M200DM>0]
+    df=df[df.num>18]
+    df=df[df.n2d>0.5]
+    df=df[df.logBHmass > 6.5]
+    #df['Hz']=df.apply(lambda x: Planck13.H(x.z).value, axis=1)
+    df['Hz']=df.apply(lambda x: 1, axis=1)
+    df['Concentration5100']=df.apply(lambda x: (divide(x.DMMass5,x.DMMass100AP))**(1/3), axis=1)
+    df['Concentration30100']=df.apply(lambda x: (divide(x.DMMass30,x.DMMass100AP))**(1/3), axis=1)
+    df['Concentration530']=df.apply(lambda x: (divide(x.DMMass5, x.DMMass30))**(1/3), axis=1)
+    df['Concentration500200']=df.apply(lambda x: (divide(x.M500DM,x.M200DM))**(1/3), axis=1)
+    df['Concentration2500200']=df.apply(lambda x: (divide(x.M2500DM,x.M200DM))**(1/3), axis=1)
+    df['Concentration2500500']=df.apply(lambda x: (divide(x.M2500DM,x.M500DM))**(1/3), axis=1)
+    df['Concentration500200R']=df.apply(lambda x: divide(x.R500DM,x.R200DM), axis=1)
+    df['Concentration2500200R']=df.apply(lambda x: divide(x.R2500DM,x.R200DM), axis=1)
+    df['Concentration2500500R']=df.apply(lambda x: divide(x.R2500DM,x.R500DM), axis=1)
+    df['Concentration200halfR']=df.apply(lambda x: divide(x.R200DM,x.DMHalfMassRad), axis=1)
+    df['Concentration500halfR']=df.apply(lambda x: divide(x.R500DM,x.DMHalfMassRad), axis=1)
+    df['Concentration2500halfR']=df.apply(lambda x: divide(x.R2500DM,x.DMHalfMassRad), axis=1)
+   
+    df['vhsqrd2500200']=df.apply(lambda x:  x.Concentration2500200 * (x.M200DM * x.R200DM), axis=1 )
+    df['vh2500200']=df.apply(lambda x:  np.sqrt(x.vhsqrd2500200), axis=1 )
+    
+    df0=df.sort_values(by='z').drop_duplicates('ProjGalaxyID')
+    df0=df0[['ProjGalaxyID', 'vh2500200']]
+    df=pd.merge(df, df0, on=['ProjGalaxyID'], how='left', suffixes=('', '_0')).drop_duplicates()
+    df1=df.sort_values(by='z', ascending=False).drop_duplicates('ProjGalaxyID')
+    df1=df1[['ProjGalaxyID', 'vh2500200']]
+    df=pd.merge(df, df1, on=['ProjGalaxyID'], how='left', suffixes=('', '_1')).drop_duplicates()
+    print(df.columns.values)
+    print(df.vh2500200_0)
+    df['vh2500200_norm0']=df.apply(lambda x:  divide(x.vh2500200, x.vh2500200_0), axis=1 )
+    df['vh2500200_norm1']=df.apply(lambda x:  divide(x.vh2500200, x.vh2500200_1), axis=1 )
+    
+    
+    #df.to_csv('evolvingEAGLEbulgediscmergedf'+sim_name+'.csv')
+    #df['DMHalfMassdensity200']=df.apply(lambda x: divide((x.logM200DM *0.5), (4/3 * np.pi * ((x.DMHalfMassRad)**3))), axis=1)
+    #df['logDMHalfMassdensity200']=df.apply(lambda x: logx(x.DMHalfMassdensity200), axis=1)
+    print(df.columns.values)
+
+    evolutionplot4(df, 'n2d',r'n2d', 'logDMHalfMassdensity',r'log($\rho_{halo, mass_{\frac{1}{2}}}$) [$M_{\odot} pkpc^{-3}$]', \
+         'Concentration2500200',r'$(\frac{M_2500}{M_{200}})^{(1/3)}$', 'vh2500200',r'$v_h [G M_{\odot} (pkpc)^{-1}]$',\
+             'logsSFRpermass', 1.4, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+
     exit()
 
+    evolutionplot4(df, 'n2d',r'n2d', 'vh2500200',r'$v_h (\frac{M_{2500}}{M_{200}})}$',\
+        'vh2500200_norm0',r'$\frac{v_h^2}{v^2_{h,z=0}}$','vh2500200_norm1',r'$\frac{v_h}{v_{h,z=3}}$',\
+             'logsSFRpermass', 1.4, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+
+    exit()
+
+
+    exit()
+
+    evolutionplot4(df, 'n2d',r'n2d', 'vhsqrd25002001',r'$v_h (\frac{M_{2500}}{M_{200}})}$',\
+        'vhsqrd25002002',r'$v_h (\frac{M_{2500}}{M_{200}})}$','vhsqrd530',r'$v_h (\frac{M_{5}}{M_{30}})}$',\
+             'logsSFRpermass', 1.4, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+
+    exit()
+    evolutionplot4(df, 'n2d',r'n2d', 'Concentration530',r'$(\frac{M_5}{M_{30}})^{(1/3)}$', \
+         'Concentration5100',r'$(\frac{M_5}{M_{100}})^{(1/3)}$', 'Concentration30100',r'$(\frac{M_{30}}{M_{100}})^{(1/3)}$',\
+             'logsSFRpermass', 1.4, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+ 
+    evolutionplot4(df, 'n2d',r'n2d', 'Concentration500200',r'$(\frac{M_{500}}{M_{200}})^{(1/3)}$', \
+         'Concentration2500200',r'$(\frac{M_{2500}}{M_{200}})^{(1/3)}$', 'Concentration2500500',r'$(\frac{M_{2500}}{M_{500}})^{(1/3)}$',\
+             'logsSFRpermass', 1.4, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+
+    evolutionplot4(df, 'n2d',r'n2d', 'Concentration500200R',r'$\frac{R_{500}}{R_{200}})$', \
+         'Concentration2500200R',r'$\frac{R_{2500}}{R_{200}}$', 'Concentration2500500R',r'$\frac{R_{2500}}{R_{500}}$',\
+             'logsSFRpermass', 1.4, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+
+    evolutionplot4(df, 'n2d',r'n2d', 'Concentration200halfR',r'$\frac{R_{200}}{R_{1/2}})$', \
+         'Concentration500halfR',r'$\frac{R_{500}}{R_{1/2}}$', 'Concentration2500halfR',r'$\frac{R_{2500}}{R_{1/2}}$',\
+             'logsSFRpermass', 1.4, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+
+
+    evolutionplot4(df, 'n2d',r'n2d', 'DMMass5',r'$M_{5}', \
+         'DMMass30',r'$M_{30}', 'DMMass100AP',r'$M_{100}',\
+             'logsSFRpermass', 1.4, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+
+    evolutionplot4(df, 'n2d',r'n2d', 'M200DM',r'$M_{200}', \
+         'M500DM',r'$M_{500}', 'M2500DM',r'$M_{2500}',\
+             'logsSFRpermass', 1.4, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+  
+    evolutionplot4(df, 'n2d',r'n2d', 'R200DM',r'$R_{200}', \
+         'R500DM',r'$R_{500}', 'R2500DM',r'$R_{2500}',\
+             'logsSFRpermass', 1.4, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+  
+    exit()
+
+ 
+    
+    exit()
+
+    evolutionplot4(df, 'n2d',r'n2d', 'logBHmass', r'log($M_{BH})$ [$M_{\odot}$]','logDMmass', r'log($M_{halo})$ [$M_{\odot}$]',\
+        'logDMHalfMassRad',r'log($R_{halo,\frac{1}{2}})$ [$M_{\odot}$]', 'logsSFRpermass', 1.4, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+
+
+    df['logSFThermalEnergy']=df.apply(lambda x: logx(x.SFThermalEnergy), axis=1)
+    df['logNSFThermalEnergy']=df.apply(lambda x: logx(x.NSFThermalEnergy), axis=1)
+    df['logSFMass']=df.apply(lambda x: logx(x.SFMass), axis=1)
+    df['logNSFMass']=df.apply(lambda x: logx(x.NSFMass), axis=1)
+
+    df['sSFThermalEnergy']=df.apply(lambda x: divide(x.SFThermalEnergy, x.Gasmass), axis=1)
+    df['sNSFThermalEnergy']=df.apply(lambda x: divide(x.NSFThermalEnergy, x.Gasmass), axis=1)
+    df['sSFMass']=df.apply(lambda x: divide(x.SFMass, x.Gasmass), axis=1)
+    df['sNSFMass']=df.apply(lambda x: divide(x.NSFMass, x.Gasmass), axis=1)
+
+    df['logsSFThermalEnergy']=df.apply(lambda x: logx(x.sSFThermalEnergy), axis=1)
+    df['logsNSFThermalEnergy']=df.apply(lambda x: logx(x.sNSFThermalEnergy), axis=1)
+    df['logsSFMass']=df.apply(lambda x: logx(x.sSFMass), axis=1)
+    df['logsNSFMass']=df.apply(lambda x: logx(x.sNSFMass), axis=1)
+
+    df['logSFTemp']=df.apply(lambda x: logx(x.SF_MassWeightedTemperature), axis=1)
+    df['sSFTemp']=df.apply(lambda x: divide(x.SF_MassWeightedTemperature, (x.SFMass +x.NSFMass)), axis=1)
+    df['logsSFTemp']=df.apply(lambda x: logx(x.sSFTemp), axis=1)
+
+    df['logSFMass']=df.apply(lambda x: logx(x.SFMass), axis=1)
+    df['sSFMass']=df.apply(lambda x: divide(x.SFMass, (x.SFMass +x.NSFMass)), axis=1)
+    df['logsSFMass']=df.apply(lambda x: logx(x.sSFMass), axis=1)
+    #df=df[df.logSFMass >7]
+    plotmovinghistogram4(df, 'logSFTemp', 'logsSFTemp', 'logSFMass', 'logsSFMass', 'transtypen2d',\
+        r'log($T_{SF, weighted}$) [$K$]',  r'log($\frac{T_{SF, weighted}}{M_{total}}$ [KM_{\odot}^-1])', r'log($M_{gas, SF}$) [$M_{\odot}$]', r'log($\frac{M_{gas, SF}}{M_{gas,tot}})$')
+
+    plotmovinghistogram4(df, 'logSFThermalEnergy', 'logNSFThermalEnergy', 'logsSFMass', 'logsNSFMass', 'n2d')
+    plotmultivariateplot(df)
+    exit()
+
+    
+
+    df['logsSFR1A']=df.apply(lambda x: logx(x.SFR1), axis=1)
+    df['sSFR3mA']=df.apply(lambda x: divide(x.SFR3m, (3**3) -1), axis=1)
+    df['logsSFR3mA']=df.apply(lambda x: logx(x.sSFR3mA), axis=1)
+    df['sSFR5mA']=df.apply(lambda x: divide(x.SFR5m, (5**3) -(3**3)), axis=1)
+    df['logsSFR5mA']=df.apply(lambda x: logx(x.sSFR5mA), axis=1)
+    df['sSFR10mA']=df.apply(lambda x: divide(x.SFR10m,(10**3) - (5**3)), axis=1)
+    df['logsSFR10mA']=df.apply(lambda x: logx(x.sSFR10mA), axis=1)
+    df['sSFR20mA']=df.apply(lambda x: divide(x.SFR20m,(20**3) - (10**3)), axis=1)
+    df['logsSFR20mA']=df.apply(lambda x: logx(x.sSFR20mA), axis=1)
+    df['sSFR30mA']=df.apply(lambda x: divide(x.SFR30m, (30**3) - (20**3)), axis=1)
+    df['logsSFR30mA']=df.apply(lambda x: logx(x.sSFR30mA), axis=1)
+
+    df['sGas1']=df.apply(lambda x: divide(x.Gasmass1,x.Starmass1), axis=1)
+    df['logsGas1']=df.apply(lambda x: logx(x.sGas1), axis=1)
+    
+    df['Gas3m']=df.apply(lambda x: x.Gasmass3- x.Gasmass1, axis=1)
+    df['sGas3m']=df.apply(lambda x: divide(x.Gas3m,x.Starmass3m), axis=1)
+    df['logsGas3m']=df.apply(lambda x: logx(x.sGas3m), axis=1)
+
+    df['Gas5m']=df.apply(lambda x: x.Gasmass5- x.Gasmass3, axis=1)
+    df['sGasm']=df.apply(lambda x: divide(x.Gas5m,x.Starmass5m), axis=1)
+    df['logsGas5m']=df.apply(lambda x: logx(x.sGasm), axis=1)
+
+    df['Gas10m']=df.apply(lambda x: x.Gasmass10- x.Gasmass5, axis=1)
+    df['sGas10m']=df.apply(lambda x: divide(x.Gas10m,x.Starmass10m), axis=1)
+    df['logsGas10m']=df.apply(lambda x: logx(x.sGas10m), axis=1)
+
+    df['Gas20m']=df.apply(lambda x: x.Gasmass20- x.Gasmass10, axis=1)
+    df['sGas20m']=df.apply(lambda x: divide(x.Gas20m,x.Starmass20m), axis=1)
+    df['logsGas20m']=df.apply(lambda x: logx(x.sGas20m), axis=1)
+
+    df['Gas30m']=df.apply(lambda x: x.Gasmass- x.Gasmass20, axis=1)
+    df['sGas30m']=df.apply(lambda x: divide(x.Gas30m,x.Starmass30m), axis=1)
+    df['logsGas30m']=df.apply(lambda x: logx(x.sGas30m), axis=1)
+    plotSFRcircles(df,'logsSFR1','logsSFR3m','logsSFR5m','logsSFR10m','logsSFR20m','logsSFR30m', 'n2d', -12,  -7, 'logsBHmass', 1.5 , 0.1, 'transtypen2d', r'Log(sSFR) [$Gyr^{-1}$]', r'Log($M_{BH}/M_{*}$) [$M_{\odot}$]')
+    plotSFRcircles(df,'Gasmass1','Gas3m','Gas5m','Gas10m','Gas20m','Gas30m', 'n2d', -12,  -7, 'logsBHmass', 1.5, 0.1, 'transtypen2d', r'Log($M_{gas}$) [$M_{\odot}$]', r'Log($E_{SF}$) [$M_{\odot} (km/s)^2$]')
+    plotSFRcircles3(df,'Gasmass1','Gas3m','Gas5m','Gas10m','Gas20m','Gas30m', 'n2d', -12,  -7, 'logSFThermalEnergy', 1.5, 0.1, 'transtypen2d', r'Log(SFR density) [$M_{\odot}Gyr^{-1} pkpc{-3}$]',r'Log($E_{thermal, SF}$)')
+    plotSFRcircles(df,'logsGas1','logsGas3m','logsGas5m','logsGas10m','logsGas20m','logsGas30m', 'n2d', -12,  -7, 'logsBHmass', 1.5, 0.1, 'transtypen2d', r'Log($M_{gas} \ M_{*}$) [$M_{\odot}$]', r'Log($M_{BH}/M_{*}$ [$M_{\odot}$])')
+    plotSFRcircles3(df,'logsGas1','logsGas3m','logsGas5m','logsGas10m','logsGas20m','logsGas30m', 'n2d', -12,  -7, 'logsBHmass', 1.5, 0.1, 'transtypen2d', r'Log($M_{gas} \ M_{*}$) [$M_{\odot}$]', r'Log($M_{BH}/M_{*} [$M_{\odot}$]$)')
+    plotSFRcircles(df,'SFR1','SFR3m','SFR5m','SFR10m','SFR20m','SFR30m', 'n2d', -12,  -7, 'logsBHmass', 1.5 , 0.1, 'transtypen2d', r'Log(SFR) [$M_{\odot}Gyr^{-1}$]', r'Log($M_{BH}/M_{*} [$M_{\odot}$]$)')
+    plotSFRcircles3(df,'SFR1','SFR3m','SFR5m','SFR10m','SFR20m','SFR30m', 'n2d', -12,  -7, 'logsBHmass', 1.5 , 0.1, 'transtypen2d', r'Log(SFR) [$M_{\odot}Gyr^{-1}$]', r'Log($M_{BH}/M_{*} [$M_{\odot}$]$)')
+    plotSFRcircles3(df,'logsSFR1','logsSFR3m','logsSFR5m','logsSFR10m','logsSFR20m','logsSFR30m', 'n2d', -12,  -7, 'logSFThermalEnergy', 1.5 , 0.1, 'transtypen2d',r'Log(sSFR) [$Gyr^{-1}$]',r'Log($E_{SF} [$M_{\odot} (km/s)^2$]$)')
+    
+    plotmovinghistogram4(df, 'logSFThermalEnergy', 'logNSFThermalEnergy', 'logsSFMass', 'logsNSFMass', 'n2d')
+    exit()
+    plotmovinghistogram4(df, 'sSFThermalEnergy', 'sNSFThermalEnergy', 'sSFMass', 'sNSFMass', 'n2d')
+    plotmovinghistogram4(df, 'logsSFThermalEnergy', 'logsNSFThermalEnergy', 'logsSFMass', 'logsNSFMass', 'n2d')
+
+    
+    exit()
+
+    evolutionplot4(df, 'n2d',r'n2d', 'logM200DM', r'log($M_{halo,200})$ [$M_{\odot}$]',\
+        'dM200DMdt', r'$\frac{M_{halo,200}}{dt}$ [$M_{\odot}Gyr^{-1}$]', 'logDM200density',\
+            r'log($\rho_{halo, 200}$) [$M_{\odot} pkpc^{-3}$]', 'logsSFRpermass', 1.4, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+    evolutionplot4(df, 'n2d',r'n2d', 'logM200DM',r'log($M_{halo,200})$ [$M_{\odot}$]',\
+        'dM200DMdt', r'$\frac{M_{halo,200}}{dt}$ [$M_{\odot}Gyr^{-1}$]','DMdensity200Area',\
+            r'log($\rho_{halo, 200}$) [$M_{\odot} pkpc^{-2}$]','logsSFRpermass', 1.4, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+    evolutionplot4(df, 'n2d',r'n2d', 'logM200DM',r'log($M_{halo,200})$ [$M_{\odot}$]',\
+        'dM200DMdt', r'$\frac{M_{halo,200}}{dt}$ [$M_{\odot}Gyr^{-1}$]','residDM200density',\
+            r'resid $\rho_{halo, 200}$ [$M_{\odot} pkpc^{-3}$]','logsSFRpermass', 1.4, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+    evolutionplot4(df, 'n2d',r'n2d', 'logM200DM',r'log($M_{halo,200})$ [$M_{\odot}$]',\
+        'dM200DMdt', r'$\frac{M_{halo,200}}{dt}$ [$M_{\odot}Gyr^{-1}$]','residDMdensity200Area',\
+            r'resid $\rho_{halo, 200}$ [$M_{\odot} pkpc^{-2}$]','logsSFRpermass', 1.4, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+    evolutionplot4(df, 'n2d',r'n2d', 'logR200DM',r'log($R_{halo,200})$ [pkpc]',\
+        'dR200DMdt',  r'$\frac{R_{halo,200}}{dt}$ [pkpc$Gyr^{-1}$]','logM200DM',\
+            r'log($M_{halo,200})$ [$M_{\odot}$]','logsSFRpermass', 1.4, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+    
+    evolutionplot4(df, 'n2d',r'n2d', 'logM500DM',r'log($M_{halo,500})$ [$M_{\odot}$]',\
+        'dM500DMdt',  r'$\frac{M_{halo,500}}{dt}$ [$M_{\odot}Gyr^{-1}$]','logDM500density',\
+            r'$\rho_{halo, 500}$ [$M_{\odot} pkpc^{-3}$]','logsSFRpermass', 1.4, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+    evolutionplot4(df, 'n2d',r'n2d', 'logM500DM',r'log($M_{halo,5})$ [$M_{\odot}$]',\
+        'dM500DMdt',  r'$\frac{M_{halo,500}}{dt}$ [$M_{\odot}Gyr^{-1}$]','DM500densityArea',\
+            r'$\rho_{halo, 500}$ [$M_{\odot} pkpc^{-2}$]','logsSFRpermass', 1.4, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+    evolutionplot4(df, 'n2d',r'n2d', 'logR500DM',r'log($R_{halo,500})$ [pkpc]',\
+        'dR500DMdt',  r'$\frac{R_{halo,200}}{dt}$ [pkpc$Gyr^{-1}$]','logM500DM',\
+            r'log($M_{halo,5})$ [$M_{\odot}$]','logsSFRpermass', 1.4, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+    
+    evolutionplot4(df, 'n2d',r'n2d', 'logM200DMmean',r'log($M^{Mean}_{halo,200})$ [$M_{\odot}$]',\
+        'dM200meanDMdt', r'$\frac{M^{Mean}_{halo,200}}{dt}$ [$M_{\odot}Gyr^{-1}$]', 'logDM200meandensity',\
+             r'log($\rho^{Mean}_{halo, 200}$) [$M_{\odot} pkpc^{-3}$]','logsSFRpermass', 1.4, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+    evolutionplot4(df, 'n2d',r'n2d', 'logM200DMmean',r'log($M^{Mean}_{halo,200})$ [$M_{\odot}$]',\
+        'dM200meanDMdt', r'$\frac{M^{Mean}_{halo,200}}{dt}$ [$M_{\odot}Gyr^{-1}$]', 'DM200meandensityArea',\
+            r'log($\rho^{Mean}_{halo, 200}$) [$M_{\odot} pkpc^{-2}$]','logsSFRpermass', 1.4, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+    evolutionplot4(df, 'n2d',r'n2d', 'logM200DMmean',r'log($M^{Mean}_{halo,200})$ [$M_{\odot}$]',\
+        'dM200meanDMdt', r'$\frac{M^{Mean}_{halo,200}}{dt}$ [$M_{\odot}Gyr^{-1}$]', 'residDM200meandensity',\
+            r'resid log($\rho^{Mean}_{halo, 200}$) [$M_{\odot} pkpc^{-3}$]','logsSFRpermass', 1.4, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+    evolutionplot4(df, 'n2d',r'n2d', 'logM200DMmean',r'log($M^{Mean}_{halo,200})$ [$M_{\odot}$]',\
+        'dM200meanDMdt', r'$\frac{M^{Mean}_{halo,200}}{dt}$ [$M_{\odot}Gyr^{-1}$]', 'residDM200meandensityArea',\
+            r'resid log($\rho^{Mean}_{halo, 200}$) [$M_{\odot} pkpc^{-2}$]','logsSFRpermass', 1.4, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+    evolutionplot4(df, 'n2d',r'n2d', 'logR200DMmean',r'log($R^{Mean}_{halo,200})$ [$pkpc$]',\
+        'dR200meanDMdt', r'$\frac{R^{Mean}_{halo,200}}{dt}$ [$pkpcGyr^{-1}$]', 'logM200DMmean',\
+            r'log($M^{Mean}_{halo,200})$ [$M_{\odot}$]','logsSFRpermass', 1.4, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+    
+
+    evolutionplot4(df, 'n2d',r'n2d', 'logDMMass100AP',r'log($M_{halo,100})$ [$M_{\odot}$]',\
+        'dM100APDMdt', r'$\frac{M_{halo,100}}{dt}$ [$M_{\odot}Gyr^{-1}$]', 'logDM100APdensity',\
+            r'log($\rho_{halo, 100}$) [$M_{\odot} pkpc^{-3}$]','logsSFRpermass', 1.4, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+    evolutionplot4(df, 'n2d',r'n2d', 'logDMMass100AP',r'log($M_{halo,100})$ [$M_{\odot}$]',\
+        'dM100APDMdt', r'$\frac{M_{halo,100}}{dt}$ [$M_{\odot}Gyr^{-1}$]','residDMAPdensity',\
+            r'resid log($\rho_{halo, 100}$) [$M_{\odot} pkpc^{-3}$]', 'logsSFRpermass', 1.4, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+    
+    evolutionplot4(df, 'n2d',r'n2d', 'logDMmass',r'log($M_{halo})$ [$M_{\odot}$]',\
+        'dMDMdt',  r'$\frac{M_{halo}}{dt}$ [$M_{\odot}Gyr^{-1}$]','logDMHalfMassdensity',\
+            r'log($\rho_{halo, halfmass}$) [$M_{\odot} pkpc^{-3}$]', 'logsSFRpermass', 1.4, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+    evolutionplot4(df, 'n2d',r'n2d', 'logDMmass',r'log($M_{halo})$ [$M_{\odot}$]',\
+        'dMDMdt',  r'$\frac{M_{halo}}{dt}$ [$M_{\odot}Gyr^{-1}$]', 'DMHalfMassdensityArea',\
+            r'log($\rho_{halo, halfmass}$) [$M_{\odot} pkpc^{-2}$]','logsSFRpermass', 1.4, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+    evolutionplot4(df, 'n2d',r'n2d', 'logDMHalfMassRad',r'log($M_{halo})$ [$M_{\odot}$]',\
+        'dRhalfDM',  r'log($\frac{R_{halo, halfmass}}{dt})$ [pkpc]', 'logDMmass',\
+            r'log($M_{halo, halfmass})$ [$M_{\odot}$]','logsSFRpermass', 1.4, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+    
+    exit()
+
+
+    #plotmovingquantiles(df, 'logmass', 'dDMmassdt', 'n2d')
+    #plotmovingquantiles(df, 'logmass', 'dBHmassdt', 'n2d')
+    #evolutionplot3(df, 'BulgeToTotal','logBHmass','logdBHmassdt',  'logsSFRpermass', 0.5, 'stargascol', 'Stargasmergerfrac', 'stargasmergercategory')
+    #
+    #evolutionplot2(df, 'logBHmass', 'logdBHmassdt', 'n2d')
+
+    
+
+
+
+
+    exit()
+    df['sgas']=df.apply(lambda x: divide(x.Gasmass,x.Starmass), axis=1)
+    df['logsgasmass']=df.apply(lambda x: logx(x.sgas), axis=1)
+ 
+
+
+    
+
+    #plotSFRcircles(df,'logsSFR1','logsSFR3m','logsSFR5m','logsSFR10m','logsSFR20m','logsSFR30m', 'n2d', -12,  -7, 'logsBHmass', 1.5 , 0.1, 'transtypen2d')
+    
+    #plotmovingquantiles(df, 'logmass', 'logsgas', 'n2d')
+    
+    #plotbulgedisctranscolourmerger(df,1.5,'BulgeToTotal','logsSFRpermass','stargascol','stargasmergercategory', 0.5, 0.05)
+    #plotSFRcircles(df,'Gasmass1','Gas3m','Gas5m','Gas10m','Gas20m','Gas30m', 'n2d', -12,  -7, 'logsBHmass', 1.5, 0.1, 'transtypen2d')
+    
+    
+    #plotmovinghistogram4(df,'logsSFR1','logsSFR3m','logsSFR10m','logsSFR30m', 'n2d')
+   
     plotmergerrate(df, 'Starmergercategory', 'lbtrounded', 'Starmass', 'Starmassmergerfrac')
     exit()
-
-    plotbulgedisctranscolourmerger(df,1.5,'BulgeToTotal','logsSFRpermass','stargascol','stargasmergercategory', 0.5,0.05)
-    plotbulgedisctranscolourmerger(df,1.5,'BulgeToTotal','logsSFRpermass','starmasscol','Starmergercategory', 0.5,0.05)
-    plotbulgedisctranscolourmerger(df,1.5,'n2d','logsSFRpermass','stargascol','stargasmergercategory', 1.4, 0.1)
-    plotbulgedisctranscolourmerger(df,1.5,'n2d','logsSFRpermass','starmasscol','Starmergercategory', 1.4, 0.1)
 
     #plotmergerrate(df, 'Starmergercategory', 'lbtrounded')
     #plotmergerrate(df, 'DMmergercategory', 'lbtrounded')
     #plotmergergasrate(df, 'stargasmergercategory', 'lbtrounded')
-    #plotSFRcircles(df,'SFR1','SFR3','SFR10','SFR', 'n2d', 0, 11)
-    #plotSFRcircles(df,'SFR1','SFR3m','SFR10m','SFR30m', 'n2d', 0, 5)
-    #plotSFRcircles(df,'logsSFR1','logsSFR3','logsSFR10','logsSFR', 'n2d',  -11, -8)
     #plotmovinghistogram4(df,'logsSFR1','logsSFR3m','logsSFR10m','logsSFR30m', 'n2d')
     plotSFRcircles(df,'SFR1','SFR3m','SFR10m','SFR30m', 'n2d', 0,  4)
-    #plotSFRcircles(df,'logsSFR1','logsSFR3m','logsSFR10m','logsSFR30m', 'n2d', -12,  -7)
-    #plotSFRcircles(df,'logsSFR1A','logsSFR3mA','logsSFR10mA','logsSFR30mA', 'n2d', -6,  1)
     exit()
     #plotmovinghistogram(df, 'Starmassmergerfrac', 'n2d')
     df=df[df.logsSFR1<-1]
@@ -1623,47 +2431,18 @@ def plotbulgetodisc(df, sim_name):
     print(df.columns.values)
     mergerdf= mergerinvestigation(df)
     #vdf=df.dropna(subset=['vHsqrd'])
-    #vdf=vdf[vdf.vHsqrd<40]
 
     
-    plotbulgedisctranscolourmerger(df,1.5,'BulgeToTotal','logsSFRpermass','stargascol','stargasmergercategory', 0.5,0.1)
-    plotbulgedisctranscolourmerger(mergerdf,1.5,'BulgeToTotal','logsSFRpermass','stargascol', 0.5,0.1, merge=True)
-    plotbulgedisctranscolourmerger(df,1.5,'BulgeToTotal','logsSFRpermass','mergercol', 0.5,0.1)
-    plotbulgedisctranscolourmerger(mergerdf,1.5,'BulgeToTotal','logsSFRpermass','mergercol', 0.5,0.1, merge=True)
-    """
-    colourscatter(vdf, 'lbt', 'logmass', 'BulgeToTotal', 0.5)
-    colourscatter(vdf, 'lbt', 'logDMmass', 'BulgeToTotal', 0.5)
-    colourscatter(vdf, 'lbt', 'vHsqrd', 'BulgeToTotal', 0.5)
-    """
+    plotbulgedisctranscolourmerger(df,1.5,'BulgeToTotal','logsSFRpermass','stargascol','stargasmergerfrac','stargasmergercategory', 0.5,0.1)
+    plotbulgedisctranscolourmerger(mergerdf,1.5,'BulgeToTotal','logsSFRpermass','stargascol', 'stargasmergerfrac','stargasmergercategory',0.5,0.1, merge=True)
     
     n2ddf=df[df.n2d>0]
     n2dmergerdf=mergerdf[mergerdf.n2d>0]
-    #n2dvdf=vdf[vdf.n2d>0]
-    plotbulgedisctranscolourmerger(n2ddf,1.5,'n2d','logsSFRpermass','stargascol', 1.4,0.1)
-    plotbulgedisctranscolourmerger(n2dmergerdf,1.5,'n2d','logsSFRpermass','stargascol', 1.4,0.1, merge=True)
-    plotbulgedisctranscolourmerger(n2ddf,1.5,'n2d','logsSFRpermass','mergercol', 1.4,0.1)
-    plotbulgedisctranscolourmerger(n2dmergerdf,1.5,'n2d','logsSFRpermass','mergercol', 1.4,0.1, merge=True)
-    """
-    colourscatter(n2dvdf, 'lbt', 'logmass', 'n2d', 1.4)
-    colourscatter(n2dvdf, 'lbt', 'logDMmass', 'n2d', 1.4)
-    colourscatter(n2dvdf, 'lbt', 'vHsqrd', 'n2d', 1.4)
-    """
 
-    exit()
 
-    #threeDplot(df, 'Starmassmergerfrac','z','n2d', 'logmass', 'logsSFR')
-    
-    plt.hist(df.Stargasmergerfrac)
-    plt.show()
-    plotmovinghistogram(df, 'n2d', 'Starmassmergerfrac')
-    plotmovinghistogram(df, 'logsSFR', 'Starmassmergerfrac')
     plotmovinghistogram(df, 'n2d', 'Stargasmergerfrac')
-    exit()
-
-    plotbulgedisctranscolourmerger(df,1.,'n2d','logsSFRpermass',1.5,0.1)
     plotbulgedisctranscolour(df,1.,'n2d','logsDMmasspermass',1.5,0.1)
     plotbulgedisctranscolour(df,1.,'n2d','logDMEllipticitypermass',1.5,0.1)
-    exit()
     
     plotmovingquantiles(df, 'logmass', 'logsSFR', 'n2d')
     plotmovingquantiles(df, 'logmass', 'logBHmass', 'n2d')
@@ -1673,33 +2452,17 @@ def plotbulgetodisc(df, sim_name):
     #categorybarchart(df, 'categoryn2d')
 
     exit()
-    colourscatter(df, 'logmass','SFR',  'n2d')
-    colourscatter(df, 'logmass','sSFR',  'n2d')
     colourscatter(df, 'logmass','logSFR',  'n2d')
-    #plotfrac(df,'roundlogmass2', 'categoryn', 'catDMfrac')
-
     plotbulgedisctranscolour(df,0.6,'n2d','logsSFRpermass',1.5,0.1)
     plotmovingquantiles(df, 'logmass', 'logsSFR', 'n2d')
     plotmovingquantiles(df, 'logmass', 'logBHmass', 'n2d')
-    plotmovingquantiles(df, 'logmass', 'logsBHmass', 'n2d')
-    plotmovingquantiles(df, 'logmass', 'logDMmass', 'n2d')
-    plotmovingquantiles(df, 'logmass', 'logsDMmass', 'n2d')
     plotfrac(df,'roundlogmass2', 'categoryn2d', 'catfrac')
     plotfrac(df,'roundsSFR2', 'categoryn2d', 'catsfrfrac')
     plotfrac(df,'roundBHmass', 'categoryn2d', 'catBHfrac')
     plotfrac(df,'roundDMmass2', 'categoryn2d', 'catDMfrac')
     
-    #df=cleanandtransformdata(df)
-    #df=df[df.sSFR>0]
-    plotmultivariateplot(df)
-    plotbulgedisctranscolour(df,0.6,'asymm','logsSFRpermass',0.25,0.05)
-    #plotbulgedisctranscolour(df,0.6,'n_total','logsSFRpermass',1.5,0.1)
-    #plotmovingquantiles(df, 'logmass', 'logsSFR', 'n_total')
-    #plotmovingquantiles(df, 'logmass', 'logBHmass', 'n_total')
-    #plotmovingquantiles(df, 'logmass', 'logDMmass', 'n_total')
 
-    plotmovingquantiles(df, 'logBHmass', 'logsSFR', 'n_total')
-    plotmovingquantiles(df, 'logmass', 'logBHmass', 'n_total')
+    plotmultivariateplot(df)
     plotmovinghistogram(df, 'logsSFR', 'asymm')
     
     maxnum=df.num.max()
@@ -1714,17 +2477,47 @@ def plotbulgetodisc(df, sim_name):
     
     stackedhistogram(df, 'n_total','n_disc','n_bulge','n_bulge_exp')
     #subplothistograms(df, 'n_total','n_disc','n_bulge','n_disca','n_bulgea','n_bulge_exp')
-    #colorbarplot(df, 'n_total', 'DiscToTotal', 'logmass', 'logsSFR', 'BHmass')
     threeDplot(df, 'dtototal','DiscToTotal','logBHmass', 'Starmass', 'logsSFR')
 
     exit()
     colorbarplot(df, 'n2d','BulgeToTotal', 'logmass', 'logsSFR', 'logBHmass')
     colorbarplot(df, 'n2d','n_total', 'logmass', 'logsSFR', 'logBHmass')
     colorbarplot(df, 'n2d','logBHmass', 'logmass', 'logsSFR', 'logBHmass')
-    colorbarplot(df, 'n2d','logsBHmass', 'logmass', 'logsSFR', 'logBHmass')
-    colorbarplot(df, 'n2d','logDMmass', 'logmass', 'logsSFR', 'logBHmass')
-    colorbarplot(df, 'n2d','logsDMmass', 'logmass', 'logsSFR', 'logBHmass')
     exit()
+
+    df=df[df.loggasmass>0.01]
+    #df['lbt']=df.apply(lambda x: -x.lbt, axis=1)
+
+    grouped=df[['zrounded','massquantile','sgas']].groupby(['zrounded','massquantile']).agg({'sgas':['median', 'std']})
+    grouped=grouped.xs('sgas', axis=1, drop_level=True)
+    df=pd.merge(df, grouped, on=['zrounded','massquantile'], how='left')
+    df=df.rename({'median':'sgas_median', 'std':'sgas_std'}, axis=1)
+    df['sgaspermass']=df.apply(lambda x: divide((x.sgas-x.sgas_median)*1e14, x.sgas_std*1e12), axis=1)
+    df['logsgaspermass']=df.apply(lambda x: logx(x.sSFRpermass), axis=1)
+
+    Norm=mcol.DivergingNorm(vmin=df['n2d'].min(), vcenter=1.5, vmax=df['n2d'].max())
+    Cmap='seismic'
+    fig, ax=plt.subplots()
+    ax.scatter(df.logsgaspermass,df.Stargasmergerfrac, c=df.n2d, cmap=Cmap, norm=Norm, alpha=0.5, s=10)
+    ax.set_xlabel(r'residual of log($M_{gas}$ / $M_{*}$)  per z per mass')
+    ax.set_ylabel(r'$f_{gas}^{merger}$  ')
+    sm=plt.cm.ScalarMappable(cmap=Cmap, norm=Norm)
+    sm.set_array([])
+    plt.subplots_adjust(right=0.8)
+    cbar_ax=fig.add_axes([0.85,0.15,0.05,0.8])
+    sm=plt.cm.ScalarMappable(cmap=Cmap, norm=Norm)
+    sm.set_array([])
+    cbar=plt.colorbar(sm, cax=cbar_ax).set_label('n2d')
+    plt.savefig('evolvinggalaxygraphbinmainbranch'+sim_name+'/logsgasmasspermassperzvsgasmergerfrac.png')
+    plt.show()
+    #plt.scatter(df.logsgasmass,df.Stargasmergerfrac, c=df.n2d, cmap=Cmap, norm=Norm, alpha=0.5, s=10)
+    #plt.show()
+    
+    df['stargasmergerfrac1']=df.apply(lambda x: cattonan(x.stargascol, x.Stargasmergerfrac, 'g'), axis=1)
+    df['stargasmergerfrac2']=df.apply(lambda x: cattonan(x.stargascol, x.Stargasmergerfrac, 'red'), axis=1)
+
+    plotbulgedisctranscolourmerger(df,1.5,'n2d','logsgaspermass','stargascol','stargasmergerfrac1','stargasmergercategory', 1.5, 0.1)
+    plotbulgedisctranscolourmerger(df,1.5,'n2d','logsgaspermass','stargascol','stargasmergerfrac2','stargasmergercategory', 1.5, 0.1)
 
 if __name__ == "__main__":
     sim_names=['RefL0050N0752']
