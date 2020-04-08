@@ -262,16 +262,16 @@ def plotchisquared(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, i_ebulge,
 		res= np.abs(rad - isolated_discsima-SersicProfilea(r, i_ebulgea, r_ebulgea, n_bulgea, poptbulgea[3]))
 		n_bulge_errora=np.sqrt(sum((res[0:int(bindex/2)]/stdbins[0:int(bindex/2)])**2))
 		
-		chisdisc.append(n_disc_error)
-		chisbulge.append(n_bulge_error)
+		chisdisc.append(n_disc_error/5)
+		chisbulge.append(n_bulge_error/5)
 		ndisc.append(n_disc)
 		nbulge.append(n_bulge)
-		chisdisca.append(n_disc_errora)
-		chisbulgea.append(n_bulge_errora)
+		chisdisca.append(n_disc_errora/5)
+		chisbulgea.append(n_bulge_errora/5)
 		ndisca.append(n_disca)
 		nbulgea.append(n_bulgea)
 		ntot.append(n1)
-		chistot.append(n1_error)
+		chistot.append(n1_error/5)
 	chisdisca=np.array(chisdisca)
 	plt.plot(ntot, chistot, label='ntot')
 	plt.plot(ndisca, chisdisca+0.5, label='ndisca')
@@ -650,7 +650,7 @@ def twoDsersicfit(sim_name, imagefile, image, i_e, r_e, guess_n, center):
 
 	
 
-	n_error=np.sqrt(np.sum(logres))
+	n_error=np.sqrt(np.sum(res)/nx*ny)
 
 	return n, n_error
 
@@ -684,9 +684,10 @@ def run_radial_profile(image, imagefile, sim_name):
 	hindex=int(hindex)
 	bhindex=int((bindex+hindex)/2)
 	n1, pcov1, poptdisca, pcovdisca, poptbulgea, pcovbulgea, poptdisc, pcovdisc,  poptbulge, pcovbulge, isolated_discsima, isolated_bulgea, isolated_bulgesima, totalsima, isolated_discsim, isolated_bulge, isolated_bulgesim, totalsim, i_ebulge, r_ebulge, i_ebulgea, r_ebulgea = calculateSersicIndices(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, nr, sim_name, imagefile, sigma_bulge, sigma_disc, radbintype)
-	
-	n2, n2_error=twoDsersicfit(sim_name, imagefile, image, i_e, r_e, n1, center)
-	print(n1, n2, n2_error)
+	#plotradialprofile(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, pcov1, pcovdisc,pcovdisca,pcovbulge,pcovbulgea,isolated_discsim,isolated_bulge,isolated_bulgesim, isolated_discsima,isolated_bulgea,isolated_bulgesima, totalsim, totalsima, n_disc,n_disca,n_bulge,n_bulgea, n1, sim_name, imagefile, sigma_bulge,sigma_disc,radbintype)
+	plotchisquared(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, i_ebulge,r_ebulge,isolated_bulge, nr, sim_name)
+	#n2, n2_error=twoDsersicfit(sim_name, imagefile, image, i_e, r_e, n1, center)
+	#print(n1, n2, n2_error)
 	
 
 
@@ -755,11 +756,11 @@ def run_radial_profile(image, imagefile, sim_name):
 	"""
 
 if __name__ == "__main__":
-	#sim_name=['RecalL0025N0752']
+	sim_name=['RecalL0025N0752']
 	#sim_name='RecalL0025N0752'
-	#imagefileRecalL0025N0752=['RecalL0025N0752galface_4938.png','']
-	sim_name=['RecalL0025N0752', 'RefL0050N0752']
-	imagefileRecalL0025N0752=['RecalL0025N0752galface_646493.png','RecalL0025N0752galface_737885.png','RecalL0025N0752galface_746518.png','RecalL0025N0752galface_853401.png','RecalL0025N0752galface_4938.png','RecalL0025N0752galface_621500.png','RecalL0025N0752galface_726306.png','RecalL0025N0752galface_51604.png']
+	imagefileRecalL0025N0752=['RecalL0025N0752galface_4938.png','']
+	#sim_name=['RecalL0025N0752', 'RefL0050N0752']
+	#imagefileRecalL0025N0752=['RecalL0025N0752galface_646493.png','RecalL0025N0752galface_737885.png','RecalL0025N0752galface_746518.png','RecalL0025N0752galface_853401.png','RecalL0025N0752galface_4938.png','RecalL0025N0752galface_621500.png','RecalL0025N0752galface_726306.png','RecalL0025N0752galface_51604.png']
 	#imagefileRefL0025N0376=['RefL0025N0376galface_1.png','RefL0025N0376galface_135107.png','RefL0025N0376galface_154514.png','RefL0025N0376galface_160979.png','RefL0025N0376galface_172979.png']
 	imagefileRefL0050N0752=['RefL0050N0752galface_2273534.png','RefL0050N0752galface_2276263.png','RefL0050N0752galface_514258.png','RefL0050N0752galface_2355640.png','RefL0050N0752galface_2639531.png']
 
