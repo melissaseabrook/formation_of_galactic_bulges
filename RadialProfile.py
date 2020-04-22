@@ -1,3 +1,5 @@
+"""Experiment with different methods for fitting radial profiles in order to extract morphological parameters for galaxy images"""
+
 import numpy as np
 from numpy import *
 import matplotlib.pyplot as plt
@@ -13,6 +15,7 @@ import seaborn as sns
 from astropy.modeling import models, fitting
 
 def logx(x):
+    #log variable 
     if x !=0:
         if x>0:
             return np.log10(x)
@@ -48,6 +51,7 @@ def radial_profile(image, center):
 	return radialprofile, stdbins, r_arr, nr
 
 def nan_helper(y):
+	#nan helper function
 	return np.isnan(y), lambda z:z.nonzero()[0]
 
 def vary_radial_profile(image, center, bintype):
@@ -104,6 +108,7 @@ def vary_radial_profile(image, center, bintype):
 	return radialprofile, stdbins, r_arr, nr
 
 def findeffectiveradius(radialprofile, r, nr):
+	#find radius within which half the total light is contained
 	totalbrightness=np.sum(radialprofile * 2 * np.pi *nr*r)
 	centralbrightness=radialprofile[0]
 	cumulativebrightness=np.cumsum(radialprofile * 2 * np.pi *nr*r)
@@ -114,21 +119,25 @@ def findeffectiveradius(radialprofile, r, nr):
 	return i_e, r_e, centralbrightness, totalbrightness
 
 def findlightintensity(radialpofile, radius):
+	#find total light within a radius
 	radius=int(radius)
 	cumulativebrightness=np.sum(radialpofile[0:radius])
 	return cumulativebrightness
 
 def SersicProfile(r, I_e, R_e, n):
+	#Sersic profile function
 	b=(1.992*n)-0.3271
 	G=(r/R_e)**(1/n)
 	return I_e*np.exp((-b*(G-1)))
 
 def SersicProfilea(r, I_e, R_e, n, a):
+	#Sersic profile function with a background translation
 	b=(1.992*n)-0.3271
 	G=(r/R_e)**(1/n)
 	return I_e*np.exp((-b*(G-1)))+a
 
 def twocomponentmodel(r, I_e, R_e, n):
+	#2 component Sersic profile function
 	b=(1.992*n)-0.3271
 	I1= I_e*np.exp((-b*((r/R_e)**(1/n)-1)))
 	I2= I_e*np.exp((-1.68*((r/R_e)-1)))
@@ -287,6 +296,7 @@ def plotchisquared(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, i_ebulge,
 	plt.show()
 
 def plotradialprofile(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, pcov1, pcovdisc,pcovdisca,pcovbulge,pcovbulgea,isolated_discsim,isolated_bulge,isolated_bulgesim, isolated_discsima,isolated_bulgea,isolated_bulgesima, totalsim, totalsima, n_disc,n_disca,n_bulge,n_bulgea, n1, sim_name, imagefile, sigma_bulge,sigma_disc,radbintype):
+	#plot radial profile, show estimated fits
 	fig=plt.figure(figsize=(15,8))
 	plt.subplot(321)
 	n_total=n1[0]
@@ -331,6 +341,7 @@ def plotradialprofile(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, pcov1,
 	#cv2.destroyAllWindows()
 	
 def calculaten_total(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, nr):
+	#calculate 1d sersic index
 	try:
 		n1, pcov1 = curve_fit(lambda x,n: SersicProfile(x, i_e, r_e, n), r, rad, p0=2, bounds=(0.01,8), sigma=stdbins, absolute_sigma=True)
 		n_total=n1[0]
@@ -361,6 +372,7 @@ def calculaten_total(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, nr):
 	return n_total, n_error,n_disc,n_bulge,n_disc_error,n_bulge_error
 
 def calculateSersicIndices(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, nr, sim_name, imagefile,sigma_bulge,sigma_disc,radbintype):
+	#calculate Sersic Index
 	a=np.empty((3,3))
 	a=a.fill(np.nan)
 	try:
@@ -420,7 +432,7 @@ def calculateSersicIndices(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, n
 	return n1, pcov1, poptdisca, pcovdisca, poptbulgea, pcovbulgea, poptdisc, pcovdisc,  poptbulge, pcovbulge, isolated_discsima, isolated_bulgea, isolated_bulgesima, totalsima, isolated_discsim, isolated_bulge, isolated_bulgesim, totalsim, i_ebulge, r_ebulge, i_ebulgea, r_ebulgea
 
 def vary_sigma(image, imagefile, sim_name):
-	#plots radius vs pixel intensity and its log
+	#plots radius vs pixel intensity and its log when sigma is varied
 	std=np.std(image)
 	BGRimage=cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
 	gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -535,7 +547,7 @@ def vary_sigma(image, imagefile, sim_name):
 	plt.show()
 
 def vary_radial_bins(image, imagefile, sim_name):
-	#plots radius vs pixel intensity and its log
+	#plots radius vs pixel intensity and its log when the radial bins are varied
 	maxVal, center = findcenter(image)
 	bintypearray=['equalintenisty','equallogintensity', 'equalradius','equallogradius']
 	for bintype in bintypearray:
@@ -559,6 +571,7 @@ def vary_radial_bins(image, imagefile, sim_name):
 		n1, pcov1, poptdisca, pcovdisca, poptbulgea, pcovbulgea, poptdisc, pcovdisc,  poptbulge, pcovbulge, isolated_discsima, isolated_bulgea, isolated_bulgesima, totalsima, isolated_discsim, isolated_bulge, isolated_bulgesim, totalsim, i_ebulge, r_ebulge, i_ebulgea, r_ebulgea = calculateSersicIndices(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, nr, sim_name, imagefile, sigma_bulge, sigma_disc, bintype)
 
 def findassymetry(image):
+	#find asymmetry of image based on 1 rotation
     image_arr = np.array(image)
     image_arr90 = np.rot90(image_arr)
     image_arr180 = np.rot90(image_arr90)
@@ -567,6 +580,7 @@ def findassymetry(image):
     return asymm
 
 def binnedasymmetry(image):
+	#find asymmetry of image based on 1 rotation
     image_arr = np.array(image)
     image_arr90 = np.rot90(image_arr)
     image_arr180 = np.rot90(image_arr90)
@@ -582,7 +596,7 @@ def binnedasymmetry(image):
     return meanasymm, asymmerror
 
 def twoDsersicfit(sim_name, imagefile, image, i_e, r_e, guess_n, center):
-
+	#perform a 2D sersic fit
 	#gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 	blur = cv2.GaussianBlur(image, ksize=(11,11), sigmaX=3,sigmaY=3)
 
@@ -655,14 +669,15 @@ def twoDsersicfit(sim_name, imagefile, image, i_e, r_e, guess_n, center):
 	return n, n_error
 
 def run_radial_profile(image, imagefile, sim_name):
+	#perform various experimentation. A few examples are shown
 	#vary_radial_bins(image, imagefile, sim_name)
 	#vary_sigma(image, imagefile, sim_name)
 	image2=image.copy()
 	image=np.average(image, axis=2, weights=[0.2126,0.587,0.114])
 	asymm = findassymetry(image)
 	meanasymm, asymmerror=binnedasymmetry(image)
-
 	radbintype='equalradius'
+
 	#plots radius vs pixel intensity and its log
 	maxVal, center = findcenter(image2)
 	rad, stdbins, r_arr, nr=radial_profile(image,center)
@@ -687,73 +702,6 @@ def run_radial_profile(image, imagefile, sim_name):
 	#plotradialprofile(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, pcov1, pcovdisc,pcovdisca,pcovbulge,pcovbulgea,isolated_discsim,isolated_bulge,isolated_bulgesim, isolated_discsima,isolated_bulgea,isolated_bulgesima, totalsim, totalsima, n_disc,n_disca,n_bulge,n_bulgea, n1, sim_name, imagefile, sigma_bulge,sigma_disc,radbintype)
 	plotchisquared(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, i_ebulge,r_ebulge,isolated_bulge, nr, sim_name)
 	#n2, n2_error=twoDsersicfit(sim_name, imagefile, image, i_e, r_e, n1, center)
-	#print(n1, n2, n2_error)
-	
-
-
-	#plotchisquared(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, i_ebulge,r_ebulge,isolated_bulge, nr, sim_name)
-	
-
-	
-	
-	"""
-	print("I_e={}, R_e={}".format(i_e, r_e))
-	print("brad={}, hrad={}, bind={}, hind={}".format(b1,h1,bindex,hindex))
-	popt1, pcov1=curve_fit(SersicProfile, r, rad, p0=(i_e, r_e, 1), bounds=((0,0,0.001), (np.inf,np.inf,10)), sigma=stdbins*6, absolute_sigma=True)
-	popt2, pcov2 = curve_fit(lambda x,n: SersicProfile(x, i_e, r_e, n), r, rad, p0=3, sigma=stdbins*2, absolute_sigma=True)
-	popt3, pcov3 = curve_fit(lambda x,n: twocomponentmodel(x, i_e, r_e, n), r, rad, sigma=stdbins*2, absolute_sigma=True)
-	print("I_e,R_e,n={}".format(popt1))
-	print("I_e={}, R_e={}, n={}".format(i_e, r_e, popt2))
-	print("I_e={}, R_e={}, n={}".format(i_e, r_e, popt3))
-
-	plt.subplot(211)
-	plt.errorbar(r, rad, yerr=(stdbins*2), fmt='', color='k', capsize=0.5, elinewidth=0.5)
-	plt.plot(r, SersicProfile(r,*popt1), 'r-', label='I_e={}, R_e={}, n={} free'.format(round(popt1[0],2),round(popt1[1],2),round(popt1[2],2)))
-	plt.plot(r, SersicProfile(r,i_e, r_e, popt2 +pcov2[0,0]), 'g--')
-	plt.plot(r, SersicProfile(r,i_e, r_e, popt2), 'g', label='I_e={}, R_e={}, fixed, n={} free'.format(round(i_e,2), round(r_e,2), round(popt2[0],2)))
-	plt.plot(r, SersicProfile(r,i_e, r_e, popt2 -pcov2[0,0]) , 'g--')
-	plt.fill_between(r, SersicProfile(r,i_e, r_e, popt2 -pcov2[0,0]**0.5), SersicProfile(r,i_e, r_e, popt2 +pcov2[0,0]**0.5), facecolor='gray', alpha=0.5)
-	plt.title('Radius vs Pixel intensity'), plt.xlabel('Radius (kpc)'), plt.ylabel('Intensity'), plt.xlim(0), plt.ylim(0,250)
-	plt.legend()
-	
-	plt.subplot(212)
-	plt.errorbar(r, rad, yerr=(stdbins*2), fmt='', color='k',  capsize=0.5, elinewidth=0.5)
-	plt.plot(r, SersicProfile(r,i_e, r_e, 1), 'r-', label='Exponential Disc, n=1')
-	plt.plot(r, SersicProfile(r,i_e, r_e, 4), 'b-', label='De Vaucouleurs, n=4')
-	plt.plot(r, twocomponentmodel(r,i_e, r_e, popt3), 'g-', label='2 component model')
-	plt.title('Exponential Disc+Vaucouleurs, 2 component fit'), plt.xlabel('Radius (kpc)'), plt.ylabel('Intensity'), plt.xlim(0), plt.ylim(0,250)
-	plt.legend()
-	plt.tight_layout()
-	plt.savefig('galaxygraphsbinRecal/radialbrightnessprofile'+imagefile)
-	plt.show()
-	
-	#2 component fitting
-	popt21, pcov21 = curve_fit(lambda x,n: SersicProfile(x, i_e, r_e, n), r[0:bindex], rad[0:bindex],sigma=stdbins[0:bindex]*2, absolute_sigma=True)
-	popt22, pcov22 = curve_fit(lambda x,n: SersicProfile(x, i_e, r_e, n), r[bindex:hindex], rad[bindex:hindex], sigma=stdbins[bindex:hindex]*2, absolute_sigma=True)
-	print("n1={}".format(popt21))
-	print("n2={}".format(popt22))
-
-	plt.subplot(211)
-	plt.errorbar(r[0:hindex], rad[0:hindex], yerr=(stdbins[0:hindex]*2), fmt='', color='k', capsize=0.5, elinewidth=0.5)
-	plt.plot(r[0:bindex], SersicProfile(r[0:bindex],i_e, r_e,popt21), 'r-', label='bulge n={}'.format(round(popt21[0],2)))
-	#plt.plot(r, SersicProfile(r,i_e, r_e, popt2 +pcov2[0,0]), 'g--')
-	plt.plot(r[bindex:hindex], SersicProfile(r[bindex:hindex],i_e, r_e, popt22), 'g', label='disc n={} free'.format(round(popt22[0],2)))
-	#plt.plot(r, SersicProfile(r,i_e, r_e, popt2 -pcov2[0,0]) , 'g--')
-	#plt.fill_between(r, SersicProfile(r,i_e, r_e, popt2 -pcov2[0,0]**0.5), SersicProfile(r,i_e, r_e, popt2 +pcov2[0,0]**0.5), facecolor='gray', alpha=0.5)
-	plt.title('Radius vs Pixel intensity'), plt.xlabel('Radius (kpc)'), plt.ylabel('Intensity'), plt.xlim(0), plt.ylim(0,250)
-	plt.legend()
-
-	plt.subplot(212)
-	plt.errorbar(r[0:hindex], rad[0:hindex], yerr=(stdbins[0:hindex]*2), fmt='', color='k', capsize=0.5, elinewidth=0.5)
-	plt.plot(r[0:bindex], SersicProfile(r[0:bindex],i_e, r_e, 4), 'b-', label='De Vaucouleurs, n=4')
-	plt.plot(r[bindex:hindex], SersicProfile(r[bindex:hindex],i_e, r_e, 1), 'r-', label='Exponential Disc, n=1')
-	plt.title('Exponential Disc+Vaucouleurs'), plt.xlabel('Radius (kpc)'), plt.ylabel('Intensity'), plt.xlim(0), #plt.ylim(0,250)
-	plt.legend()
-	plt.tight_layout()
-	plt.savefig('galaxygraphsbinRecal/2componentradialbrightnessprofile'+imagefile)
-	plt.show()
-	plt.close()
-	"""
 
 if __name__ == "__main__":
 	sim_name=['RecalL0025N0752']

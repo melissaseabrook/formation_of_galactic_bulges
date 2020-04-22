@@ -1,3 +1,5 @@
+"""Experimentation with non-parametric parameters such as asymmetry, concentration"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image

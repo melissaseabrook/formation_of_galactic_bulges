@@ -1,3 +1,5 @@
+"""Initial test of data extraction for the EAGLE database"""
+
 import eagleSqlTools as sql
 import numpy as np
 import matplotlib .pyplot as plt

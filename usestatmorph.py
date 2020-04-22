@@ -1,3 +1,5 @@
+"""Testing file for STATMORPH, Rodriguez 2019"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.ndimage as ndi

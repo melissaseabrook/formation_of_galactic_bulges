@@ -1,3 +1,5 @@
+"""Manipulate and calculate parameters for galaxy images and properties"""
+
 import numpy as np
 from numpy import *
 import pandas as pd
@@ -28,8 +30,8 @@ import astropy.units as u
 import statmorph
 from astropy.modeling import models, fitting
 
-#sns.set_style('whitegrid')
 def logx(x):
+    #log variable
     if x !=0:
         if x>0:
             return np.log10(x)
@@ -39,6 +41,7 @@ def logx(x):
         return 0
 
 def cutBHmass(x):
+    #remove unphysical BH masses
     if x>0:
         if x<4.5:
             return np.nan
@@ -48,30 +51,35 @@ def cutBHmass(x):
         return x
 
 def threshtonan(x, thresh):
+    #if parameter below threshold, convert to nan
     if x<thresh:
         return np.nan
     else:
         return x
 
 def threshtonan2(x, y, thresh):
+    #if parameter belwo threshold, convert to 0
     if x<thresh:
         return 0
     else:
         return y
 
 def divide(x,y):
+    #divide x by y
     if y !=0:
         return x/y
     else:
         return 0
 
 def invert(var):
+    #invert variable
     if var != 0:
         return(1/var)*10
     else:
         return 0
 
 def sigmaclip(image, sigma, box_size):
+    #sigma clip image
     #shows relative fluctuations in pixel intensities
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     median_background=np.median(gray)
@@ -93,6 +101,7 @@ def sigmaclip(image, sigma, box_size):
     return(gray)
         
 def findlightintensity(image, radius, center):
+    #find intensity at given radius
     npix, npiy = image.shape[:2]
     x1 = np.arange(0,npix)
     y1 = np.arange(0,npiy)
@@ -227,13 +236,14 @@ def findandlabelbulge(image, imagefile, sim_name):
     return btdradius, btdintensity, count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius
 
 def invertbtd(r):
+    #invert btd
     if r !=0:
         return 1/r
     else:
         return 0
 
 def radial_profile(image, center):
-        #returns average pixel intensity for all possible radius, centred around the central bulge
+    #returns average pixel intensity for all possible radius, centred around the central bulge
     npix, npiy = image.shape[:2]
     x1 = np.arange(0,npix)
     y1 = np.arange(0,npiy)
@@ -252,6 +262,7 @@ def radial_profile(image, center):
     return radialprofile, r_arr, stdbins, nr
 
 def findeffectiveradius(radialprofile, r, nr):
+    #find effective radius and intensity - within which half of total light is enclosed
     totalbrightness=np.sum(radialprofile * 2 * np.pi *r*nr)
     centralbrightness=radialprofile[0]
     cumulativebrightness=np.cumsum(radialprofile * 2 * np.pi *r*nr)
@@ -261,11 +272,13 @@ def findeffectiveradius(radialprofile, r, nr):
     return i_e, r_e, centralbrightness, totalbrightness
 
 def SersicProfile(r, I_e, R_e, n):
+    #Sersic Profile function
     b=np.exp(0.6950 + np.log(n) - (0.1789/n))
     G=(r/R_e)**(1/n)
     return I_e*np.exp((-b*(G-1)))
 
 def findeffectiveradiusfrac(radialprofile, r, nr, frac):
+    #find radius a which fraction of light is enclosed
     print(len(radialprofile), len(r),len(nr))
     totalbrightness=np.sum(radialprofile * 2 * np.pi *nr*r)
     centralbrightness=radialprofile[0]
@@ -276,12 +289,14 @@ def findeffectiveradiusfrac(radialprofile, r, nr, frac):
     return i_e, r_e, centralbrightness, totalbrightness
 
 def findconcentration(rad, r, nr):
+    #find concetration of image
     i20, r80, cb,tb=findeffectiveradiusfrac(rad, r, nr, 0.8)
     i20, r20, cb, tb=findeffectiveradiusfrac(rad, r, nr, 0.2)
     con=5*np.log10(r80/r20)
     return con, r80,r20
 
 def findassymetry(image):
+    #find image asymmetry based on 3 rotations
     image_arr = np.array(image)
     image_arr90 = np.rot90(image_arr)
     image_arr180 = np.rot90(image_arr90)
@@ -297,6 +312,7 @@ def findassymetry(image):
     return asymm, asymmerror
 
 def twoDsersicfit(image, i_e, r_e, guess_n, center):
+    #perform a 2d sersic fit
     try:
         blur = cv2.GaussianBlur(image, ksize=(11,11), sigmaX=3,sigmaY=3)
         x0,y0=center
@@ -307,20 +323,20 @@ def twoDsersicfit(image, i_e, r_e, guess_n, center):
         fit_sersic = fitting.LevMarLSQFitter()
         sersic_model = fit_sersic(sersicinit, x, y, z, maxiter=500, acc=1e-5)
         nd=sersic_model.n.value
-        #sim=sersic_model(x,y)
-        #=ma.log10(image)
-        #logimg=logimg.filled(0)
-        #logsim=ma.log10(sim)
-        #logsim=logsim.filled(0)
-        #res = logx(np.sum(np.abs(logimg - logsim)))
-        #nd_error=np.sqrt(res)
-        nd_error=np.nan
+        sim=sersic_model(x,y)
+        logimg=np.log10(image)
+        logimg=logimg.filled(0)
+        logsim=ma.log10(sim)
+        logsim=logsim.filled(0)
+        res = logx(np.sum(np.abs(logimg - logsim)))
+        nd_error=np.sqrt(res)
     except:
         nd=np.nan
         nd_error=np.nan
     return nd, nd_error
 
 def findsersicindex(image, bindex, dindex):
+    #find Sersic index
     image2=np.average(image, axis=2, weights=[0.2126,0.587,0.114])
     asymm, asymmerror=findassymetry(image2)
     try:
@@ -349,7 +365,6 @@ def findsersicindex(image, bindex, dindex):
 
         n2d, n2d_error=twoDsersicfit(image2, i_e, r_e, n_total, center)
 
-
         poptdisc, pcovdisc = curve_fit(lambda x,n: SersicProfile(x, i_e, r_e, n), r[bindex:dindex], rad[bindex:dindex], sigma=stdbins[bindex:dindex], bounds=(0.0001,10), absolute_sigma=True)
         n_disc=poptdisc[0]
         n_disc_error=pcovdisc[0,0]
@@ -362,7 +377,6 @@ def findsersicindex(image, bindex, dindex):
         n_bulge= poptbulge[0]
         n_bulge_error= pcovbulge[0,0]
         print("I_ebulge={}, R_ebulge={}, n_bulge={}".format(i_ebulge,r_ebulge, n_bulge))
-
 
         exponential_discsim=SersicProfile(r, i_e, r_e, 1)
         isolated_bulge2= rad - exponential_discsim
@@ -391,6 +405,7 @@ def findsersicindex(image, bindex, dindex):
     return n_total, n2d, n2d_error, n_disc, n_bulge, n_bulge_exp, n_total_error, n_disc_error, n_bulge_error, n_bulge_exp_error, con, r80, r20, asymm, asymmerror
 
 def runstatmorph(image):
+    #run statmorph analysis
     image2=np.average(image, axis=2, weights=[0.2126,0.587,0.114])
     gain = 1000.0
     threshold = photutils.detect_threshold(image2, 1.5)
@@ -419,6 +434,7 @@ def runstatmorph(image):
     return morph_c, morph_asymm, morph_sersic_n, morph_smoothness, morph_sersic_rhalf, morph_xc_asymmetry, morph_yc_asymmetry
 
 def findmergers(dfall):
+    #find mergers using networkx
     dfall=dfall[['z', 'ProjGalaxyID', 'DescID', 'DescGalaxyID', 'Starmass', 'BHmass', 'DMmass', 'Gasmass', 'M200', 'R200']]
     for galaxyid in dfall.ProjGalaxyID.unique():
         df=dfall[dfall.ProjGalaxyID==galaxyid]
@@ -490,10 +506,12 @@ def findmergers(dfall):
     return dfall
 
 def mergers(df):
+    #add mergers to df
     df[['Starmassmergerfrac',  'BHmassmergerfrac',  'DMmassmergerfrac',  'Gasmassmergerfrac', 'Stargasmergerfrac']]=df.apply(lambda x: find(x.ProjGalaxyID, x.DescGalaxyID, df), axis=1)
     return df
 
-def find(galaxyid, node1, df):  
+def find(galaxyid, node1, df): 
+    #find mergers for specific galaxy 
     temp=df[df.ProjGalaxyID==galaxyid]
     G=nx.from_pandas_edgelist(df=temp, source='DescGalaxyID', target='DescID', create_using=nx.DiGraph)
     G.add_nodes_from(nodes_for_adding=temp.DescGalaxyID.tolist())
@@ -545,17 +563,21 @@ def find(galaxyid, node1, df):
     return pd.Series([starmerg, gasmerg, BHmerg, DMmerg, stargas])
 
 def drop_numerical_outliers(df, z_thresh):
+    #drop numerical outlier
     constrains=df.select_dtypes(include=[np.number]).apply(lambda x: np.abs(stats.zscore(x)) <z_thresh).all(axis=1)
     df.drop(df.index[~constrains], inplace=True)
 
 def removeoutlierscolumn(df, column_name, sigma):
+    #remove outliers in a specific column
     df=df[np.abs(df[column_name]-df[column_name].mean())<=(sigma*df[column_name].std())]
     return df
 
 def getImage(path):
+    #return image path
     return OffsetImage(plt.imread('evolvinggalaxyimagebinmainbranch'+sim_name+'/'+path), zoom=0.15)
 
 def categorise(asymm, param, thresh):
+    #categorise images based on asymmtery and morphology
     if asymm > 0.3:
         return 'A'
     elif param > thresh:
@@ -564,13 +586,13 @@ def categorise(asymm, param, thresh):
         return 'D'
 
 def cleanandtransformdata(df):
+    #clean data
     print(df.shape)
     df.sort_values(['z','ProjGalaxyID'], ascending=[False,True], inplace=True)
     df['lbt']=df.apply(lambda x: -round(Planck13.lookback_time(x.z).value, 1), axis=1)
     df['lbt2']=df.apply(lambda x: round(Planck13.lookback_time(x.z).value, 1), axis=1)
     df['zrounded']=df.apply(lambda x: np.round(x.z, decimals=1), axis=1)
 
-    
     df['lookbacktime']=df.apply(lambda x: -(Planck13.lookback_time(x.z).value)*(1e9), axis=1)
     """
     df['dlbt']=df.groupby('ProjGalaxyID')['lookbacktime'].diff()
@@ -595,14 +617,10 @@ def cleanandtransformdata(df):
     df['dn_totaldt']=df.apply(lambda x: (x.dn_total)/(x.dlbt), axis=1)
     df['dD2Tdt']=df.apply(lambda x: (x.dD2T)/(x.dlbt), axis=1)
     """
-
     #drop_numerical_outliers(df, 3)
     #df=df=df.reset_index()
     #print(df.shape)
-    
     df['num']= df.groupby('ProjGalaxyID')['ProjGalaxyID'].transform('count')
-    print(df.shape)
-    #df=df[df.num>7]
     print(df.ProjGalaxyID.nunique())
     df['BulgeToTotal']=df.apply(lambda x: (1-x.DiscToTotal), axis=1)
     df['logBHmass']=df.apply(lambda x: logx(x.BHmass), axis=1)
@@ -624,8 +642,6 @@ def cleanandtransformdata(df):
     df['categoryn']=df.apply(lambda x: categorise(x.asymm, x.n_total, 1.5), axis=1)
     df['categorybt']=df.apply(lambda x: categorise(x.asymm, x.BulgeToTotal, 0.5), axis=1)
     df['categoryn2d']=df.apply(lambda x: categorise(x.asymm, x.n2d, 1.4), axis=1)
-
-
     
     df['massquantile']=pd.qcut(df['logmass'], 5, labels=False)
     grouped=df[['zrounded','massquantile','sSFR']].groupby(['zrounded','massquantile']).agg({'sSFR':['median', 'std']})
@@ -680,9 +696,6 @@ def cleanandtransformdata(df):
     """
     return df
 
-def plotbulgetodisc(df, sim_name):
-    pass
-
 
 if __name__ == "__main__":
     sim_names=['RefL0050N0752']
@@ -694,7 +707,6 @@ if __name__ == "__main__":
             print('........reading all data.......')
             df=pd.read_csv('evolvingEAGLEbulgediscmergedf'+sim_name+'.csv')
             print(df.columns.values)
-            #exit()
             """
             df=df[['ProjGalaxyID','DescGalaxyID', 'DescID', 'z', 'Z', 'face', 'HalfMassRadius', 'VelDisp',
                     'Starmass', 'BHmass', 'DMmass' ,'Gasmass', 'SFR', 'StellarInitialMass',
@@ -736,7 +748,6 @@ if __name__ == "__main__":
                     'logR200DM', 'logR500DM', 'logR200DMmean', 'logDMHalfMassRad','DMMass5','DMMass30']]
             """
             dfextra =pd.read_csv('dataextra4df'+sim_name+'.csv')
-            #dfextra=dfextra[['DescGalaxyID','DMMass5','DMMass30']]
             print(dfextra.columns.values)
             df= pd.merge(df, dfextra, on=['DescGalaxyID'], how='left').drop_duplicates()
             
@@ -802,12 +813,6 @@ if __name__ == "__main__":
             """
             
             print(df.columns.values)
-            """
-            df2['Concentration5200']=df2.apply(lambda x: divide(x.DMMass5,x.M200DM), axis=1)
-            df2['Concentration530']=df2.apply(lambda x: divide(x.DMMass5,x.DMMass30), axis=1)
-            df2['Concentration30200']=df2.apply(lambda x: divide(x.DMMass30,x.M200DM), axis=1)
-            """
-            
             df.to_csv('evolvingEAGLEbulgediscmergedf'+sim_name+'.csv')
             
         else:
@@ -820,8 +825,6 @@ if __name__ == "__main__":
                 df=pd.read_csv('evolvingEAGLEimagesmainbranchdf'+sim_name+'.csv')
                 df['num']= df.groupby('ProjGalaxyID')['ProjGalaxyID'].transform('count')
                 df=df[df.num>17]
-                #df=df[df.num>5]
-                print(df.shape)
 
                 discbulgetemp=[]
                 for filename in df['filename']:
@@ -875,6 +878,5 @@ if __name__ == "__main__":
             #df3= df.append(df2, ignore_index=True)
             #df3.to_csv('evolvingEAGLEbulgediscmergedf'+sim_name+'total.csv')
 
-        plotbulgetodisc(df, sim_name)
 
 

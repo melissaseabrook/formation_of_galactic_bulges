@@ -1,3 +1,5 @@
+"""Compare the effects of using different resolutions of simulations"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
@@ -95,6 +97,7 @@ def vary_radial_profile(image, center, bintype):
 	return radialprofile, stdbins, r_arr, nr
 
 def findeffectiveradius(radialprofile, r, nr):
+	#find effective raidus
 	totalbrightness=np.sum(radialprofile * 2 * np.pi *nr*r)
 	centralbrightness=radialprofile[0]
 	cumulativebrightness=np.cumsum(radialprofile * 2 * np.pi *nr*r)
@@ -105,11 +108,13 @@ def findeffectiveradius(radialprofile, r, nr):
 	return i_e, r_e, centralbrightness, totalbrightness
 
 def findlightintensity(radialpofile, radius):
+	#find total light intensity within a given radius
 	radius=int(radius)
 	cumulativebrightness=np.sum(radialpofile[0:radius])
 	return cumulativebrightness
 
 def SersicProfile(r, I_e, R_e, n):
+	#Sersic Profile function
 	b=(1.992*n)-0.3271
 	G=(r/R_e)**(1/n)
 	return I_e*np.exp((-b*(G-1)))
@@ -313,6 +318,7 @@ def plotchisquared(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, i_ebulge,
 	plt.show()
 
 def plotradialprofile(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, n1_error, n_disc_error,n_bulge_error,isolated_discsim,isolated_bulge,isolated_bulgesim, totalsim, n_disc,n_bulge, n1, sim_name, imagefile, sigma_bulge,sigma_disc,radbintype):
+	#plot radial profile and fits
 	fig=plt.figure(figsize=(15,8))
 	plt.subplot(221)
 	n_total=n1
@@ -558,6 +564,7 @@ def vary_radial_bins(image, imagefile, sim_name):
 		n1, pcov1, poptdisca, pcovdisca, poptbulgea, pcovbulgea, poptdisc, pcovdisc,  poptbulge, pcovbulge, isolated_discsima, isolated_bulgea, isolated_bulgesima, totalsima, isolated_discsim, isolated_bulge, isolated_bulgesim, totalsim, i_ebulge, r_ebulge, i_ebulgea, r_ebulgea = calculateSersicIndices(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, nr, sim_name, imagefile, sigma_bulge, sigma_disc, bintype)
 
 def findassymetry(image):
+	#find asymmetry based on 1 rotation
 	image_arr = np.array(image)
 	image_arr90 = np.rot90(image_arr)
 	image_arr180 = np.rot90(image_arr90)
@@ -566,6 +573,7 @@ def findassymetry(image):
 	return asymm
 
 def binnedasymmetry(image):
+	#find asymmetry based on 3 rotations
 	image_arr = np.array(image)
 	image_arr90 = np.rot90(image_arr)
 	image_arr180 = np.rot90(image_arr90)
@@ -579,6 +587,20 @@ def binnedasymmetry(image):
 	meanasymm=np.mean([asymm1,asymm2,asymm3])
 	asymmerror=np.std([asymm1,asymm2,asymm3])
 	return meanasymm, asymmerror
+
+def plotall2(df1):
+	#plot all images to compare resolutions
+	fig=plt.figure(figsize=(15,8))
+	for i,image in enumerate(df1.imagefile):
+		df=df1[df1.imagefile==image]
+		plt.subplot(2,4, i+1)
+		cv2image=plt.imread('ResolutionComparison/opencvbulgedisc'+image, 0)
+		plt.imshow(cv2image)
+		plt.axis('off')
+		plt.title('n1={}$\pm${}, \n n_disc={}$\pm${}, n_bulge={}$\pm${}, \n asymm={}, \n bin_asymm={}$\pm${}'.format(df.n1.values[0], df.n1_error.values[0],  df.n_disc.values[0], df.n_disc_error.values[0],  df.n_bulge.values[0], df.n_bulge_error.values[0], df.asymm.values[0], df.meanasymm.values[0], df.asymmerror.values[0]))
+	plt.tight_layout()
+	plt.savefig('ResolutionComparison/Comparisonplot.png')
+	plt.show()
 
 def run_radial_profile(image, imagefile, sim_name):
 	#vary_radial_bins(image, imagefile, sim_name)
@@ -614,20 +636,6 @@ def run_radial_profile(image, imagefile, sim_name):
 	#plotchisquared(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, i_ebulge,r_ebulge,isolated_bulge, nr, sim_name)
 	#plotradialprofile(rad, r, i_e, r_e, stdbins, bindex, bhindex, hindex, n1_error, n_disc_error,n_bulge_error,isolated_discsim,isolated_bulge,isolated_bulgesim, totalsim, n_disc,n_bulge, n1, sim_name, imagefile, sigma_bulge,sigma_disc,radbintype)
 	return n1, n1_error,  n_disc, n_disc_error,  n_bulge, n_bulge_error, asymm, meanasymm, asymmerror, sigma_bulge, sigma_disc
-
-
-def plotall2(df1):
-	fig=plt.figure(figsize=(15,8))
-	for i,image in enumerate(df1.imagefile):
-		df=df1[df1.imagefile==image]
-		plt.subplot(2,4, i+1)
-		cv2image=plt.imread('ResolutionComparison/opencvbulgedisc'+image, 0)
-		plt.imshow(cv2image)
-		plt.axis('off')
-		plt.title('n1={}$\pm${}, \n n_disc={}$\pm${}, n_bulge={}$\pm${}, \n asymm={}, \n bin_asymm={}$\pm${}'.format(df.n1.values[0], df.n1_error.values[0],  df.n_disc.values[0], df.n_disc_error.values[0],  df.n_bulge.values[0], df.n_bulge_error.values[0], df.asymm.values[0], df.meanasymm.values[0], df.asymmerror.values[0]))
-	plt.tight_layout()
-	plt.savefig('ResolutionComparison/Comparisonplot.png')
-	plt.show()
 
 if __name__ == "__main__":
 	sim_name=['RecalL0025N0752','RefL0050N0752']

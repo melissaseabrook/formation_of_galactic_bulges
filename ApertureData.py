@@ -1,3 +1,5 @@
+"""Extract Propeties of galaxies at dfferent images"""
+
 import eagleSqlTools as sql
 import numpy as np
 import matplotlib .pyplot as plt
@@ -12,6 +14,7 @@ dir_base=os.getcwd()
 con = sql.connect("mrz438", password="HDfrcZQ4")
 #con = sql.connect("<username>", password="<password>")
 def download_image(url, filename, sim_name, querytype):
+    #download image 
     print(filename)
     if url == '':
         return('')
@@ -20,9 +23,6 @@ def download_image(url, filename, sim_name, querytype):
         local_path_image=os.path.join(dir_base, 'evolvinggalaxyimagebin'+''+querytype+''+sim_name+'/'+filename)
         return(local_path_image)
 
-# MW properties: M* = 5 10^10 solar masses, SFR = 3.5 solar masses per year, 
-# Mh =- 1.1 10^12 solar masses:
-# see https://www.annualreviews.org/doi/10.1146/annurev-astro-081915-023441
 #Uses eagleSQLTools module to connect to database for username and password
 #If username and password not given, module will prompt for it.
 def getdata(mySims, querytype):
@@ -258,9 +258,6 @@ def getdata(mySims, querytype):
             print(df)
             df.to_csv('data'+querytype+'df'+sim_name+'.csv')
             print('done')
-
-            
-
 
 if __name__ == "__main__":
     mySims = np.array(['RefL0050N0752'])

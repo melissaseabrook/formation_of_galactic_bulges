@@ -1,3 +1,5 @@
+"""Investigate the z=0 population of galaxies"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
@@ -22,16 +24,39 @@ import scipy.ndimage as ndi
 from astropy.modeling import models, fitting
 
 def logx(x):
+    #base 10 log
     if x !=0:
         return np.log10(x)
     else:
         return 0
 
 def divide(x,y):
+    #divide x by y
     if y !=0:
         return x/y
     else:
         return 0
+
+def threshtonan(x, thresh):
+    #convert values below theshold to nan
+    if x<thresh:
+        return np.nan
+    else:
+        return x
+
+def threshtonanupper(x, thresh):
+    #convert values above theshold to nan
+    if x>thresh:
+        return np.nan
+    else:
+        return x
+
+def extract_val(x):
+    #extract middle of string
+    try:
+        return x[1:7]
+    except:
+        return np.nan
 
 def sigmaclip(image, sigma, box_size):
     #shows relative fluctuations in pixel intensities
@@ -55,6 +80,7 @@ def sigmaclip(image, sigma, box_size):
     return(gray)
         
 def findlightintensity(image, radius, center):
+    #find light intensity at given radius
     npix, npiy = image.shape[:2]
     x1 = np.arange(0,npix)
     y1 = np.arange(0,npiy)
@@ -188,13 +214,14 @@ def findandlabelbulge(image, imagefile, sim_name):
     return btdradius, btdintensity, count, hradius, bradius, disc_intensity, bulge_intensity, btotalintensity, btotalradius
 
 def invertbtd(r):
+    #invert btd
     if r !=0:
         return 1/r
     else:
         return 0
 
 def radial_profile(image, center):
-    	#returns average pixel intensity for all possible radius, centred around the central bulge
+    #returns average pixel intensity for all possible radius, centred around the central bulge
 	npix, npiy = image.shape[:2]
 	x1 = np.arange(0,npix)
 	y1 = np.arange(0,npiy)
@@ -213,6 +240,7 @@ def radial_profile(image, center):
 	return radialprofile, r_arr, stdbins, nr
 
 def findeffectiveradius(radialprofile, r, nr):
+    #find radius at which half the total light is contained
 	totalbrightness=np.sum(radialprofile * 2 * np.pi *r*nr)
 	centralbrightness=radialprofile[0]
 	cumulativebrightness=np.cumsum(radialprofile * 2 * np.pi *r*nr)
@@ -223,6 +251,7 @@ def findeffectiveradius(radialprofile, r, nr):
 	return i_e, r_e, centralbrightness, totalbrightness
 
 def findeffectiveradiusfrac(radialprofile, r, nr, frac):
+    #find radius at which fraction of total light is contained
     print(len(radialprofile), len(r),len(nr))
     totalbrightness=np.sum(radialprofile * 2 * np.pi *nr*r)
     centralbrightness=radialprofile[0]
@@ -233,22 +262,26 @@ def findeffectiveradiusfrac(radialprofile, r, nr, frac):
     return i_e, r_e, centralbrightness, totalbrightness
 
 def SersicProfile(r, I_e, R_e, n):
+    #sersic profile function
 	b=np.exp(0.6950 + np.log(n) - (0.1789/n))
 	G=(r/R_e)**(1/n)
 	return I_e*np.exp((-b*(G-1)))
 
 def SersicProfilea(r, I_e, R_e, n, a):
+    #sersic profile with a background translation
 	b=(2*n)-(1/3)
 	G=(r/R_e)**(1/n)
 	return I_e*np.exp((-b*(G-1)))+a
 
 def findconcentration(rad, r, nr):
+    #find concentration
     i20, r80, cb,tb=findeffectiveradiusfrac(rad, r, nr, 0.8)
     i20, r20, cb, tb=findeffectiveradiusfrac(rad, r, nr, 0.2)
     con=5*np.log10(r80/r20)
     return con, r80,r20
 
 def findassymetry(image):
+    #find asymmetry
     image_arr = np.array(image)
     image_arr90 = np.rot90(image_arr)
     image_arr180 = np.rot90(image_arr90)
@@ -264,6 +297,7 @@ def findassymetry(image):
     return asymm, asymmerror
 
 def twoDsersicfit(image, i_e, r_e, guess_n, center):
+    #fit a 2d sersic index
     try:
         blur = cv2.GaussianBlur(image, ksize=(11,11), sigmaX=3,sigmaY=3)
         x0,y0=center
@@ -289,10 +323,10 @@ def twoDsersicfit(image, i_e, r_e, guess_n, center):
     return nd, n2d_error
 
 def findsersicindex(image, bindex, dindex):
+    #produce different sersic indices
     image2=np.average(image, axis=2, weights=[0.2126,0.587,0.114])
     asymm, asymmerror=findassymetry(image2)
 
-    
     try:
         maxVal, center = findcenter(image)
         rad, r_arr,stdbins, nr=radial_profile(image,center)
@@ -397,6 +431,7 @@ def findsersicindex(image, bindex, dindex):
     return n_total, n2d,n2d_error, n_disca, n_bulgea, n_disc, n_bulge, n_bulge_exp, n_total_error,n_total_error1, n_disca_error, n_bulgea_error, n_disc_error, n_bulge_error, n_bulge_exp_error, con, r80, r20, asymm, asymmerror
 
 def runstatmorph(image):
+    #run statmorph
     image2=np.average(image, axis=2, weights=[0.2126,0.587,0.114])
     gain = 1000.0
     threshold = photutils.detect_threshold(image2, 1.5)
@@ -425,20 +460,24 @@ def runstatmorph(image):
     return morph_c, morph_asymm, morph_sersic_n, morph_smoothness, morph_sersic_rhalf, morph_xc_asymmetry, morph_yc_asymmetry
 
 def drop_numerical_outliers(df, z_thresh):
+    #remove outliers
     constrains=df.select_dtypes(include=[np.number]).apply(lambda x: np.abs(stats.zscore(x)) <z_thresh).all(axis=1)
     df.drop(df.index[~constrains], inplace=True)
 
 def removeoutlierscolumn(df, column_name, sigma):
+    #remove outliers from specific column
     df=df[np.abs(df[column_name]-df[column_name].mean())<=(sigma*df[column_name].std())]
     return df
 
 def invert(var):
+    #invert varaible
     if var != 0:
         return(1/var)*10
     else:
         return 0
 
 def categorise(asymm, param, thresh):
+    #categorise based on asymmetry and morphological parameter
     if asymm > 0.35:
         return 'asymmetric'
     elif param > thresh+0.1:
@@ -449,6 +488,7 @@ def categorise(asymm, param, thresh):
         return 'border'
 
 def colourise(asymm, param, thresh):
+    #colourise parameters based on asymetry and threshold.
     if asymm > 0.35:
         return 'y'
     elif param > thresh+0.1:
@@ -459,6 +499,7 @@ def colourise(asymm, param, thresh):
         return 'purple'
 
 def cleanandtransformdata(df):
+    #clean and manipulate data
     print(df.shape)
     #drop_numerical_outliers(df, 3)
     #df=df=df.reset_index()
@@ -487,7 +528,55 @@ def cleanandtransformdata(df):
     df['vHsqrd']=df.apply(lambda x: divide(6.67*10e-11*x.M200, x.R200), axis=1)
     print(df.shape)
 
+    df['sSFR']=df.apply(lambda x: divide(x.SFR,x.Starmass), axis=1)
+    df['logsSFR']=df.apply(lambda x: logx(x.sSFR), axis=1)
+    df['n2d_error']=df.apply(lambda x: x.n2d_error/(256*2), axis=1)
+    df['n1total']=df.apply(lambda x: x.n_total, axis=1)
+    df['n1total_error']=df.apply(lambda x: extract_val(x.n_total_error1), axis=1)
+    df['n1total_error']= df['n1total_error'].astype(float)
+    df['n1total_error']=df.apply(lambda x: x.n1total_error*50, axis=1)
+    df=df[df.n2d_error<1]
+    df=df[df.n_total>0]
+    df=df[df.n2d>0]
+    df=df[df.logsSFR<0]
+    df=df[df.asymm<0.3]
+    df['loggas']=df.apply(lambda x: logx(x.Gasmass), axis=1)
+    df['sgas']=df.apply(lambda x: divide(x.Gasmass,x.Starmass), axis=1)
+    df['logsgas']=df.apply(lambda x: logx(x.sgas), axis=1)
+    df['sDMmassType']=df.apply(lambda x: divide(x.StarmassType,x.DMmass), axis=1)
+    df['logsDMmassType']=df.apply(lambda x: logx(x.sDMmassType), axis=1)
+    df['sBHmass']=df.apply(lambda x: divide(x.BHmass,x.Starmass), axis=1)
+    df['logsBHmass']=df.apply(lambda x: logx(x.sBHmass), axis=1)
+    df['logmassType']=df.apply(lambda x: logx(x.StarmassType), axis=1)
+    df['sSFRType']=df.apply(lambda x: divide(x.SFR*1e12,x.StarmassType), axis=1)
+    df['logsSFRType']=df.apply(lambda x: logx(x.sSFRType), axis=1)
+    df['logMsMh']=df.apply(lambda x: divide(x.logmass, x.logDMmass), axis=1)
+    df=df[df.logDMmass>11]
+    df['sSFR']=df.apply(lambda x: divide(x.SFR,x.Starmass), axis=1)
+    df['logsSFR']=df.apply(lambda x: logx(x.sSFR), axis=1)
+
+    df['n_total']=df.apply(lambda x: threshtonan(x.n_total, 0.4), axis=1)
+    df['n_disc']=df.apply(lambda x: threshtonan(x.n_disc, 0.1), axis=1)
+    df['n_bulge']=df.apply(lambda x: threshtonan(x.n_disc, 0.4), axis=1)
+    df['n_bulge_exp']=df.apply(lambda x: threshtonan(x.n_disc, 0.1), axis=1)
+    df['n2d']=df.apply(lambda x: threshtonan(x.n_disc, 0.4), axis=1)
+    df['n_total']=df.apply(lambda x: threshtonanupper(x.n_total, 5), axis=1)
+    df['n_disc']=df.apply(lambda x: threshtonanupper(x.n_disc, 4), axis=1)
+    df['n_bulge']=df.apply(lambda x: threshtonanupper(x.n_disc, 6), axis=1)
+    df['n_bulge_exp']=df.apply(lambda x: threshtonanupper(x.n_disc, 5), axis=1)
+    df['n2d']=df.apply(lambda x: threshtonanupper(x.n_disc, 5), axis=1)
+
+    df=df[df.logsSFR<0]
+    df=df[df.logsSFR>-12]
+    n2df=df[df.n2d>0.5]
+    ndf=df[df.n_total>0.5]
+    n2ndf=ndf[ndf.n2d>0.5]
+    #vdf=df.dropna(subset=['vHsqrd'])
+    #vdf=vdf[vdf.vHsqrd<40]
+    #n2dvdf=vdf[vdf.n2d>0]
+
 def threeDplot(df, x,y,z, column_size, column_colour):
+    #produce 3D plot
     df['BHmassbin']=pd.cut(df.logBHmass, 30)
     df['BHmasscounts']=df.groupby('BHmassbin')['BHmassbin'].transform('count')
     df['fracofbin']=df.apply(lambda x: (10.0/x.BHmasscounts), axis=1)
@@ -556,6 +645,7 @@ def threeDplot(df, x,y,z, column_size, column_colour):
     plt.show()
 
 def colorbarplot(df, x,y, column_size, column_colour, column_marker, xname, yname, colourname):
+    #produce coloured scatter plot with colorbar and varying sizes and shapes of markers.
     Norm=mcol.DivergingNorm(vmin=df[column_colour].min(), vcenter=df[column_colour].median(), vmax=df[column_colour].max())
     #Cmap=mcol.LinearSegmentedColormap.from_list("cmop", ['red','mediumorchid','blue'])
     Cmap='Autumn'
@@ -573,6 +663,7 @@ def colorbarplot(df, x,y, column_size, column_colour, column_marker, xname, ynam
     plt.show()
 
 def stackedhistogram(df, param1, param2, param3, param5):
+    #produce plot of stacked histograms and their errors
     plt.subplot(211)
     colors1=['yellow','r','blue','green']
     colors2=['r','blue','green']
@@ -594,6 +685,7 @@ def stackedhistogram(df, param1, param2, param3, param5):
     plt.show()
 
 def disthistogram(df, param1, param2, param3, param4, name1,name2,name3,name4):
+    #produce histogrms using distplot
     fig, axs =plt.subplots(2,1)
     colors1=['yellow','r','blue','green']
     colors2=['r','blue','green']
@@ -641,6 +733,7 @@ def disthistogram(df, param1, param2, param3, param4, name1,name2,name3,name4):
     plt.show()
 
 def subplothistograms(df, param1, param2, param3, param4, param5, param6):
+    #produce individual subplots of histograms
     plt.subplot(6,2,1)
     plt.hist(df[param2], 50)
     plt.xlabel(param2)
@@ -687,6 +780,7 @@ def subplothistograms(df, param1, param2, param3, param4, param5, param6):
     plt.show()
 
 def binvalue(df, paramx, paramy, binno):
+    #bin parameter, giving median, upper and lower quantiles, standard deviation and bin edges
     binedgs=np.linspace(df[paramx].min(), df[paramx].max(), binno)
     binedgs2=np.linspace(df[paramx].min(), df[paramx].max(), binno -1)
     medianvals=[]
@@ -708,6 +802,7 @@ def binvalue(df, paramx, paramy, binno):
     return medianvals, binedgs2, lowquart, uppquart, stdvals
 
 def colourscatter(df,x,y, column_colour, thresh):
+    #produce scatter plot with PDFS
     Norm=mcol.DivergingNorm(vmin=df[column_colour].min(), vcenter=thresh, vmax=df[column_colour].max())
     #Cmap=mcol.LinearSegmentedColormap.from_list("cmop", ['tomato','cornflowerblue'])
     Cmap='seismic'
@@ -759,254 +854,16 @@ def colourscatter(df,x,y, column_colour, thresh):
     plt.savefig('galaxygraphsbin'+sim_name+'/plot'+x+''+y+'colouredby'+column_colour+'.png')
     plt.show()
 
-def threshtonan(x, thresh):
-    if x<thresh:
-        return np.nan
-    else:
-        return x
-
-def threshtonanupper(x, thresh):
-    if x>thresh:
-        return np.nan
-    else:
-        return x
-
-def extract_val(x):
-    try:
-        return x[1:7]
-    except:
-        return np.nan
-
 def plotbulgetodisc(df, sim_name):
+    #plot different plots. A few examples are shown
     print(df.columns.values)
-    df['sSFR']=df.apply(lambda x: divide(x.SFR,x.Starmass), axis=1)
-    df['logsSFR']=df.apply(lambda x: logx(x.sSFR), axis=1)
-    #print(df.n_total_error1.value)
-
-    df['n2d_error']=df.apply(lambda x: x.n2d_error/(256*2), axis=1)
-    df['n1total']=df.apply(lambda x: x.n_total, axis=1)
-    df['n1total_error']=df.apply(lambda x: extract_val(x.n_total_error1), axis=1)
-    df['n1total_error']= df['n1total_error'].astype(float)
-    df['n1total_error']=df.apply(lambda x: x.n1total_error*50, axis=1)
-    df=df[df.n2d_error<1]
-    df=df[df.n_total>0]
-    df=df[df.n2d>0]
-    df=df[df.logsSFR<0]
-    df=df[df.asymm<0.3]
 
     colorbarplot(df, 'btdradius', 'BulgeToTotal', 'logmass', 'logsSFR', 'logBHmass', r'$r_{bulge} / r_{disc}$', 'BulgeToTotal',r'log(sSFR) [$yr^{-1}$]')
-    colorbarplot(df, 'btdintensity', 'BulgeToTotal', 'logmass', 'logsSFR', 'logBHmass', r'$I_{bulge} / I_{disc}$', 'BulgeToTotal',r'log(sSFR) [$yr^{-1}$]')
-    exit()
-
     disthistogram(df, 'n1total', 'n2d', 'n_disc', 'n_bulge', r'$n_{1d}$', r'$n_{2d}$',r'$n_{disc}$',r'$n_{bulge}$' )
-    
-    #colourscatter(ndf, 'asymm','n_total_error','n_total', 1.5)
-    #colourscatter(ndf, 'asymm','n1total_error','n_total', 1.5)
-    #colourscatter(n2df, 'asymm','n2d_error','n2d', 1.5)
-    exit()
-
-    df['loggas']=df.apply(lambda x: logx(x.Gasmass), axis=1)
-    df['sgas']=df.apply(lambda x: divide(x.Gasmass,x.Starmass), axis=1)
-    df['logsgas']=df.apply(lambda x: logx(x.sgas), axis=1)
-    df['sDMmassType']=df.apply(lambda x: divide(x.StarmassType,x.DMmass), axis=1)
-    df['logsDMmassType']=df.apply(lambda x: logx(x.sDMmassType), axis=1)
-    df['sBHmass']=df.apply(lambda x: divide(x.BHmass,x.Starmass), axis=1)
-    df['logsBHmass']=df.apply(lambda x: logx(x.sBHmass), axis=1)
-    df['logmassType']=df.apply(lambda x: logx(x.StarmassType), axis=1)
-    df['sSFRType']=df.apply(lambda x: divide(x.SFR*1e12,x.StarmassType), axis=1)
-    df['logsSFRType']=df.apply(lambda x: logx(x.sSFRType), axis=1)
-    df['logMsMh']=df.apply(lambda x: divide(x.logmass, x.logDMmass), axis=1)
-    df=df[df.logDMmass>11]
-    df['sSFR']=df.apply(lambda x: divide(x.SFR,x.Starmass), axis=1)
-    df['logsSFR']=df.apply(lambda x: logx(x.sSFR), axis=1)
-
-    df['n_total']=df.apply(lambda x: threshtonan(x.n_total, 0.4), axis=1)
-    df['n_disc']=df.apply(lambda x: threshtonan(x.n_disc, 0.1), axis=1)
-    df['n_bulge']=df.apply(lambda x: threshtonan(x.n_disc, 0.4), axis=1)
-    df['n_bulge_exp']=df.apply(lambda x: threshtonan(x.n_disc, 0.1), axis=1)
-    df['n2d']=df.apply(lambda x: threshtonan(x.n_disc, 0.4), axis=1)
-
-    df['n_total']=df.apply(lambda x: threshtonanupper(x.n_total, 5), axis=1)
-    df['n_disc']=df.apply(lambda x: threshtonanupper(x.n_disc, 4), axis=1)
-    df['n_bulge']=df.apply(lambda x: threshtonanupper(x.n_disc, 6), axis=1)
-    df['n_bulge_exp']=df.apply(lambda x: threshtonanupper(x.n_disc, 5), axis=1)
-    df['n2d']=df.apply(lambda x: threshtonanupper(x.n_disc, 5), axis=1)
-
-    df=df[df.logsSFR<0]
-    df=df[df.logsSFR>-12]
-    n2df=df[df.n2d>0.5]
-    ndf=df[df.n_total>0.5]
-    n2ndf=ndf[ndf.n2d>0.5]
-    
     #stackedhistogram(df, 'n_total','n_disc','n_bulge', 'n2d')
-    colourscatter(ndf, 'gas','sSFR','n2d', 1.4)
-    colourscatter(ndf, 'sgas','sSFR','n_total', 1.4)
-    #colourscatter(ndf, 'logmass','logsSFR','n_total', 1.5)
-    #colourscatter(ndf, 'logmass','logsSFR','BulgeToTotal', 0.5)
-    exit()
-    #vdf=df.dropna(subset=['vHsqrd'])
-    #vdf=vdf[vdf.vHsqrd<40]
-    #n2dvdf=vdf[vdf.n2d>0]
-
-
-
-    colorbarplot(ndf, 'n2d', 'logBHmass', 'logmass', 'logsSFR', 'logBHmass', )
-    colorbarplot(n2df, 'n2d', 'logDMmass', 'logmass', 'logsSFR', 'logBHmass')
-    colorbarplot(n2ndf, 'n2d', 'logsBHmass', 'logmass', 'logsSFR', 'logBHmass')
-    colorbarplot(n2ndf, 'n2d', 'logsDMmass', 'logmass', 'logsSFR', 'logBHmass')
-    colorbarplot(n2ndf, 'n2d', 'DMEllipticity', 'logmass', 'logsSFR', 'logBHmass')
-    colorbarplot(n2ndf, 'n2d', 'StellarEllipticity', 'logmass', 'logsSFR', 'logBHmass')
-    colorbarplot(n2ndf, 'n2d', 'BHAccretionrate', 'logmass', 'logsSFR', 'logBHmass')
-
-    colorbarplot(ndf, 'BulgeToTotal', 'logBHmass', 'logmass', 'logsSFR', 'logBHmass', )
-    colorbarplot(n2df, 'BulgeToTotal', 'logDMmass', 'logmass', 'logsSFR', 'logBHmass')
-    colorbarplot(n2ndf, 'BulgeToTotal', 'logsBHmass', 'logmass', 'logsSFR', 'logBHmass')
-    colorbarplot(n2ndf, 'BulgeToTotal', 'logsDMmass', 'logmass', 'logsSFR', 'logBHmass')
-    colorbarplot(n2ndf, 'BulgeToTotal', 'DMEllipticity', 'logmass', 'logsSFR', 'logBHmass')
-    colorbarplot(n2ndf, 'BulgeToTotal', 'StellarEllipticity', 'logmass', 'logsSFR', 'logBHmass')
-    colorbarplot(n2ndf, 'BulgeToTotal', 'BHAccretionrate', 'logmass', 'logsSFR', 'logBHmass')
-
-    #colourscatter(n2df, 'logmass','logsSFR','n2d', 1.4)
-    #colourscatter(ndf, 'logmass','logsSFR','n_total', 1.5)
-    #colourscatter(ndf, 'logmass','logsSFR','BulgeToTotal', 0.5)
-    exit()
-    #colourscatter(n2ddf, 'logmass','logsSFR','n2d', 1.3)
-    exit()
-    #colourscatter(n2ddf, 'logDMmass','logsSFRType','n2d', 1.4)
-    #colourscatter(df, 'logDMmass','logsSFRType','BulgeToTotal', 0.5)
-    colourscatter(n2ddf, 'logDMmass','logMsMh','n2d', 1.4)
-    colourscatter(df, 'logDMmass','logMsMh','BulgeToTotal', 0.5)
-    #colourscatter(n2dvdf, 'logDMmass', 'vHsqrd', 'n2d', 1.4)
-    #colourscatter(vdf, 'logDMmass', 'vHsqrd', 'BulgeToTotal', 0.5)
-
-    #colorbarplot(df, 'n_total', 'DiscToTotal', 'logmass', 'logsSFR', 'logBHmass')
-    #colorbarplot(df, 'n2d', 'DiscToTotal', 'logmass', 'logsSFR', 'logBHmass')
-    #colorbarplot(df, 'n2d', 'n_total', 'logmass', 'logsSFR', 'logBHmass')
-    exit()
-    #df=df[df.con>0.1]
-    df=df[df.asymm<0.6]
-    df=df[df.sSFR>0]
-    #df[df.n_total_error>20]=np.nan
-    #df[df.n_total<0.1] =np.nan
+    colourscatter(df, 'gas','sSFR','n2d', 1.4)
     threeDplot(df, 'asymm','DiscToTotal','logBHmass', 'mass', 'logsSFR')
-    exit()
-    """
-    df=df[df.n_disc_error<10]
-    df=df[df.n_bulge_error<10]
-    df=df[df.n_bulge_exp_error<10]
-    """
     stackedhistogram(df, 'n_total','n_disc','n_bulge','n_bulge_exp', 'morph_sersic_n')
-    #plt.plot(df.morph_sersic_n)
-    #plt.show()
-    #threeDplot(df, 'asymm','DiscToTotal','logBHmass', 'logmass', 'logsSFR')
-    exit()
-    plt.scatter(df.SF_MassFromSNII, df.logmass)
-    plt.show()
-    plt.scatter(df.Stars_MassFromSNII, df.logmass)
-    plt.show()
-    plt.scatter(df.SF_MassFromSNIa, df.logmass)
-    plt.show()
-    plt.scatter(df.Stars_MassFromSNIa, df.logmass)
-    plt.show()
-    """
-    colorbarplot(df, 'morph_xc_asymmetry', 'DiscToTotal', 'logmass', 'logsSFR', 'logBHmass')
-    colorbarplot(df, 'btdintensity', 'BulgeToTotal', 'logmass', 'logsSFR', 'logBHmass')
-    colorbarplot(df, 'btdradius', 'BulgeToTotal', 'logmass', 'logsSFR', 'logBHmass')
-    colorbarplot(df, 'asymm', 'BulgeToTotal', 'logmass', 'logsSFR', 'logBHmass')
-    colorbarplot(df, 'n_total', 'DiscToTotal', 'logmass', 'logsSFR', 'logBHmass')
-    colorbarplot(df, 'morph_sersic_n', 'DiscToTotal', 'logmass', 'logsSFR', 'logBHmass')
-    colorbarplot(df, 'asymm', 'logBHmass', 'logmass', 'logsSFR', 'logBHmass')
-    colorbarplot(df, 'morph_xc_asymmetry', 'logBHmass', 'logmass', 'logsSFR', 'logBHmass')
-    colorbarplot(df, 'BulgeToTotal', 'logBHmass', 'logmass', 'logsSFR', 'logBHmass')
-    """
-    stackedhistogram(df, 'n_total','n_disc','n_bulge','n_bulge_exp', 'morph_sersic_n')
-
-    plt.scatter(df.morph_sersic_n, df.n_total, alpha=0.5, label='n_total')
-    plt.scatter(df.morph_sersic_n, df.n_disc, alpha=0.5, label='n_disc')
-    plt.scatter(df.morph_sersic_n, df.n_bulge, alpha=0.5, label='n_bulge')
-    
-    plt.legend()
-    plt.xlabel('stat morph sersic n')
-    plt.tight_layout()
-    plt.savefig('galaxygraphsbin'+sim_name+'/nvsnstat.png')
-    plt.show()
-    
-    exit()
-    plt.subplot(211)
-    plt.hist(df.asymm, histtype='step',  fill=False, bins=20,label='asymmetry')
-    plt.hist(df.morph_asymm, histtype='step',  fill=False, bins=20, label='statmorph asymmetry')
-    plt.legend()
-    plt.subplot(212)
-    plt.hist(df.con, histtype='step',  fill=False,  bins=20,label='concentration')
-    plt.hist(df.morph_c, histtype='step',  fill=False,  bins=20, label='statmorph concentration')
-    plt.legend()
-    plt.savefig('galaxygraphsbin'+sim_name+'/CAhistogram.png')
-    plt.show()
-    exit()
-    colorbarplot(df, 'asymm', 'morph_asymm', 'logmass', 'logsSFR', 'logBHmass')
-    colorbarplot(df, 'con', 'morph_c', 'logmass', 'logsSFR', 'logBHmass')
-    exit()
-    print(df.shape)
-
-    #df=df[df.n_total>0.05]
-    #stackedhistogram(df, 'n_total','DiscToTotal','con','asymm')
-    #subplothistograms(df, 'n_total','n_disc','n_bulge','n_disca','n_bulgea','n_bulge_exp')
-    colorbarplot(df, 'asymm', 'logBHmass', 'logmass', 'logsSFR', 'BHmass')
-    colorbarplot(df, 'con', 'logBHmass', 'logmass', 'logsSFR', 'BHmass')
-    exit()
-    threeDplot(df, 'asymm','DiscToTotal','logBHmass', 'mass', 'logsSFR')
-    threeDplot(df, 'con','DiscToTotal','logBHmass', 'mass', 'logsSFR')
-    exit()
-    
-    
-    size=100*(df.mass)/(df.mass.max())
-    g=sns.PairGrid(df, vars=['DiscToTotal','dtbradius','dtbintensity','n_total','n_disc','n_bulge','SFR', 'BHmass','con','asymm'])
-    g.map_diag(sns.kdeplot)
-    g.hue_vals=df['mass']
-    g.hue_names=df['mass'].unique()
-    g.palette=sns.color_palette('Blues', len(g.hue_names))
-    g.map_offdiag(plt.scatter, s=size)
-    plt.tight_layout()
-    plt.subplots_adjust(top=0.9)
-    g.fig.suptitle('PairPlot for relationships between paramters, coloured by galaxy size')
-    g.savefig('galaxygraphsbin'+sim_name+'/asymmconparametersrelationships.png')
-    plt.show()
-
-    exit()
-    plt.close()
-    
-    size=100*(df.mass)/(df.mass.max())
-    g=sns.PairGrid(df, x_vars=['DiscToTotal','SFR', 'BHmass'], y_vars=['n_total','n_disc','n_bulge','n_disca','n_bulgea'])
-    g.hue_vals=df['mass']
-    g.hue_names=df['mass'].unique()
-    g.palette=sns.color_palette('Blues', len(g.hue_names))
-    g.map(plt.scatter, s=size)
-    plt.tight_layout()
-    plt.subplots_adjust(top=0.9)
-    g.fig.suptitle('PairPlot for relationships between paramters, coloured by galaxy size')
-    g.savefig('galaxygraphsbin'+sim_name+'/selectedbulgeparametersrelationships.png')
-    plt.show()
-    plt.close()
-   
-    stackedhistogram(df, 'n_total','n_disc','n_bulge','n_disca','n_bulgea','n_bulge_exp')
-    plt.close()
-    subplothistograms(df, 'n_total','n_disc','n_bulge','n_disca','n_bulgea','n_bulge_exp')
-    plt.close()
-    
-    fig=plt.figure()
-    ax0=fig.add_subplot(221)
-    ax1=fig.add_subplot(222)
-    ax2=fig.add_subplot(223)
-    ax3=fig.add_subplot(224)
-    markers={"low":'^', "okay":'o', 'high':'s'}
-    g=sns.relplot(x='n_disc', y='DiscToTotal', size='mass', sizes=(10,150), hue='SFR', palette='autumn', style='BHBin', markers=markers,data=df, ax=ax0)
-    g=sns.relplot(x='n_disca', y='DiscToTotal', size='mass', sizes=(10,150), hue='SFR', palette='autumn', style='BHBin', markers=markers,data=df, ax=ax1)
-    g=sns.relplot(x='n_bulge', y='DiscToTotal', size='mass', sizes=(10,150), hue='SFR', palette='autumn', style='BHBin', markers=markers,data=df,ax=ax2)
-    g=sns.relplot(x='n_bulgea', y='DiscToTotal', size='mass', sizes=(10,150), hue='SFR', palette='autumn', style='BHBin', markers=markers,data=df, ax=ax3)
-    fig.tight_layout()
-    fig.savefig('galaxygraphsbin'+sim_name+'/DiscToTotalvsn_disc.png')
-    plt.show()
-    plt.close()
 
 if __name__ == "__main__":
     sim_name='RefL0050N0752'
@@ -1043,7 +900,6 @@ if __name__ == "__main__":
             df= pd.merge(df1, df2, on=['filename'], how='left').drop_duplicates()
             df.to_csv('EAGLEbulgedisc'+sim_name+'final.csv')
         
-
     plotbulgetodisc(df, sim_name)
 
 

@@ -1,3 +1,5 @@
+"""Download and save galaxy images for z=0, along with other non-morphological parameters"""
+
 import eagleSqlTools as sql
 import numpy as np
 import matplotlib .pyplot as plt

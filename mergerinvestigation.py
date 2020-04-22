@@ -1,3 +1,5 @@
+"""Test File for investigating methods for identifying mergers"""
+
 import numpy as np
 from numpy import *
 import pandas as pd

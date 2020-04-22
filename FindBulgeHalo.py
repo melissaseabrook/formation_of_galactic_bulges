@@ -1,3 +1,5 @@
+"""Initial Test File for finding bulges and discs of galaxies"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
